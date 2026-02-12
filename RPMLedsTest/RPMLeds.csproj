@@ -32,6 +32,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>H:\SteamLibrary\steamapps\common\My Winter Car\mywintercar_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
     <Reference Include="PlayMaker">
       <HintPath>H:\SteamLibrary\steamapps\common\My Winter Car\mywintercar_Data\Managed\PlayMaker.dll</HintPath>
     </Reference>
