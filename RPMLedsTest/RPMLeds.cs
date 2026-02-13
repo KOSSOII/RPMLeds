@@ -3,6 +3,7 @@ using MSCLoader;
 using System.Linq;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using Harmony;
 
 
 namespace RPMLeds
@@ -12,42 +13,11 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.1"; // Version
+        public override string Version => "1.2"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech G923/G29"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
-        
-        internal static class LogitechManager
-        {
-            private static bool initialized = false;
-
-            public static bool Initialize()
-            {
-                if (initialized)
-                    return true;
-
-                bool ok = LogitechGSDK.LogiSteeringInitialize(false);
-                if (ok)
-                    initialized = true;
-
-                return ok;
-            }
-
-            public static void Shutdown()
-            {
-                if (!initialized)
-                    return;
-
-                LogitechGSDK.LogiSteeringShutdown();
-                initialized = false;
-            }
-        }
-        public override void ModSetup()
-        {
-            SetupFunction(Setup.OnLoad, Mod_OnLoad);
-            SetupFunction(Setup.FixedUpdate, Mod_FixedUpdate);
-            SetupFunction(Setup.ModSettings, Mod_Settings);
-            SetupFunction(Setup.OnMenuLoad, Mod_OnMenuLoad);
-        }
+        public static bool Patch = true;
+        private HarmonyInstance harmony;
         public class PartInfo
         {
             public string Path;
@@ -55,6 +25,9 @@ namespace RPMLeds
             public FsmFloat PartValue;
             public FsmBool Installed;
         }
+
+        #region SettingsVars
+
         SettingsCheckBox _showDebugMSG;
         SettingsCheckBox _enableAdvancedFFB;
         SettingsDropDownList _maxRPMSource;
@@ -72,8 +45,117 @@ namespace RPMLeds
         SettingsCheckBox _kekmetEnabled;
         SettingsCheckBox _gifuEnabled;
         SettingsCheckBox _corrisEnabled;
+        SettingsCheckBox _modEnabled;
         SettingsHeader _headerFFBA;
+
+        #endregion SettingsVars
+
+        #region Vars
         ForceFeedback FFBComp;
+
+        FsmFloat carRPM;
+        FsmFloat maxSteeringAngle;
+        FsmFloat carSpeed;
+        PartInfo revLimit;
+        PartInfo raceTachot;
+        FsmString currentVeh;
+
+        RegularCarInfo Kekmet;
+        RegularCarInfo Taxi;
+        RegularCarInfo Sorbet;
+        RegularCarInfo Gifu;
+
+        const float RPM_MAX_DEFAULT = 7000f;
+        const float RPM_FIRST_DEFAULT = 5000f;
+
+        float maxChangePerSec = 80f;
+        float spring = 0f;
+        float damper = 0f;
+        #endregion
+
+        internal static class LogitechManager
+        {
+            private static bool initialized = false;
+
+            public static bool Initialize()
+            {
+                bool ok = false;
+                if (initialized)
+                    return true;
+                try
+                {
+                    ok = LogitechGSDK.LogiSteeringInitialize(false);
+                }
+                catch
+                {
+                    ModConsole.Print("LogiSteeringInitialize function failed");
+                }
+                 
+                if (ok)
+                    initialized = true;
+
+                return ok;
+            }
+
+            public static void Shutdown()
+            {
+                if (!initialized)
+                    return;
+
+                LogitechGSDK.LogiSteeringShutdown();
+                initialized = false;
+            }
+        }
+
+        #region Start() Custom
+        [HarmonyPatch(typeof(ForceFeedback), "Start")]
+        class Patch_Block_Start
+        {
+            static bool Prefix(ForceFeedback __instance, ref CarDynamics ___cardynamics)
+            {
+                if (!Patch)
+                    return true;
+                ___cardynamics = __instance.GetComponent<CarDynamics>();
+                Debug.Log("Default FFB Start() Disabled");
+                return false;
+            }
+        }
+        #endregion
+
+        #region Update() Custom
+        [HarmonyPatch(typeof(ForceFeedback), "Update")]
+        class Patch_Block_Update
+        {
+            static bool Prefix(ref int ___sign, ref bool ___invertForceFeedback, ref float ___forceFeedback, ref int ___force, ref CarDynamics ___cardynamics, ref int ___clampValue, ref float ___multiplier, ref int ___factor)
+            {
+                if (!Patch)
+                    return true;
+
+                ___sign = 1;
+                if (___invertForceFeedback)
+                {
+                    ___sign = -1;
+                }
+
+                ___forceFeedback = ___cardynamics.forceFeedback;
+                if (Mathf.Abs(___forceFeedback) > (float)___clampValue)
+                {
+                    ___forceFeedback = (float)___clampValue * Mathf.Sign(___forceFeedback);
+                }
+
+                ___force = (int)(___forceFeedback * ___multiplier) * ___factor * ___sign;
+                return false;
+            }
+        }
+        #endregion
+
+        public override void ModSetup()
+        {
+            SetupFunction(Setup.OnLoad, Mod_OnLoad);
+            SetupFunction(Setup.FixedUpdate, Mod_FixedUpdate);
+            SetupFunction(Setup.ModSettings, Mod_Settings);
+            SetupFunction(Setup.OnMenuLoad, Mod_OnMenuLoad);
+        }
         private void Mod_Settings()
         {
             Settings.AddHeader("Enable for cars");
@@ -97,6 +179,7 @@ namespace RPMLeds
             _damperForceAtHighSpeed = Settings.AddSlider("DamperFHS", "Force at high speed", 1F, 100, 30, visibleByDefault: false);
             _damperForceMultiplyAtMaxWheelAngle = Settings.AddSlider("DamperAngle", "Damper Force Multiply At Max Wheel Angle", 1F, 5, 1.4f, visibleByDefault: false);
             _springForce = Settings.AddSlider("SpringForce", "Spring Force", 1, 100, 80, visibleByDefault: false);
+            _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true);
         }
         private void TogleAdvancedFFB()
         {
@@ -165,7 +248,6 @@ namespace RPMLeds
                 Installed = installed, 
             };
         }
-
         class RegularCarInfo
         {
             public FsmFloat RPM;
@@ -184,24 +266,13 @@ namespace RPMLeds
                 };
             }
         }
-
-        FsmFloat carRPM;
-        FsmFloat carSpeed;
-        PartInfo revLimit;
-        PartInfo raceTachot;
-        FsmString currentVeh;
-
-        RegularCarInfo Kekmet;
-        RegularCarInfo Taxi;
-        RegularCarInfo Sorbet;
-        RegularCarInfo Gifu;
-
-        const float RPM_MAX_DEFAULT = 7000f;
-        const float RPM_FIRST_DEFAULT = 5000f;
         private void Mod_OnLoad()
         {
+            Patch = _modEnabled.GetValue();
             //What drive now
             currentVeh = FsmVariables.GlobalVariables.GetFsmString("PlayerCurrentVehicle");
+
+            maxSteeringAngle = GameObject.Find("Systems/OptionsDB").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
 
             //Corris
             carRPM = FsmVariables.GlobalVariables.FindFsmFloat("RPM");
@@ -229,6 +300,11 @@ namespace RPMLeds
                 _manualMaxRPM.SetVisibility(true);
             }
             TogleAdvancedFFB();
+
+            harmony = HarmonyInstance.Create("izuko.rpmledffb");
+            harmony.PatchAll();
+            ModConsole.Print("Harmony patches applied");
+
         }
         private void Mod_OnMenuLoad()
         {
@@ -242,24 +318,25 @@ namespace RPMLeds
                 if (_showDebugMSG.GetValue())
                     ModConsole.Print("Logitech init failed");
             }
-            
+            TogleAdvancedFFB();
+
         }
-        float maxSteeringAngle = 900f;
-        float maxChangePerSec = 80f;
-        float spring = 0f;
-        float damper = 0f;
+        public bool forcesIsZero = false;
         private void SetForcesToZero()
         {
+            if (!LogitechGSDK.LogiIsConnected(0)) return;
             LogitechGSDK.LogiStopConstantForce(0);
             LogitechGSDK.LogiStopDamperForce(0);
             LogitechGSDK.LogiStopSpringForce(0);
+            forcesIsZero = true;
         }
         private void Mod_FixedUpdate()
         {
-          
+
             if (string.IsNullOrEmpty(currentVeh.Value))
             {
-                SetForcesToZero();
+                if (!forcesIsZero)
+                    SetForcesToZero();
                 return;
             }
 
@@ -330,6 +407,7 @@ namespace RPMLeds
             var damperLow = _damperForceAtLowSpeed.GetValue();
             var damperHigh = _damperForceAtHighSpeed.GetValue();
             var damperMultyplyMaxAngle = _damperForceMultiplyAtMaxWheelAngle.GetValue();
+            var maxanglerot = maxSteeringAngle.Value;
 
             if (currentRPM > 50)
             {
@@ -379,8 +457,8 @@ namespace RPMLeds
             {
                 // --- Steering angle
                 var state = LogitechGSDK.LogiGetStateCSharp(0);
-                float currentAngle = (state.lX / 32768f) * maxSteeringAngle;
-                float angleFactor = Mathf.Clamp01(Mathf.Abs(currentAngle) / maxSteeringAngle);
+                float currentAngle = (state.lX / 32768f) * maxanglerot;
+                float angleFactor = Mathf.Clamp01(Mathf.Abs(currentAngle) / maxanglerot);
 
                 // --- Speed
                 float speed = currentSpeed;
@@ -408,6 +486,8 @@ namespace RPMLeds
                 }
             }
             LogitechGSDK.LogiPlayConstantForce(0, (int)targetForce);
+
+            forcesIsZero = false;
         }
     }
 }
