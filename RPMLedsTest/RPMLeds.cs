@@ -13,7 +13,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.2"; // Version
+        public override string Version => "1.2.1"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech G923/G29"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -321,7 +321,7 @@ namespace RPMLeds
             TogleAdvancedFFB();
 
         }
-        public bool forcesIsZero = false;
+        public bool forcesIsZero = true;
         private void SetForcesToZero()
         {
             if (!LogitechGSDK.LogiIsConnected(0)) return;
