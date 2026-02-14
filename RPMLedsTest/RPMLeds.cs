@@ -13,7 +13,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.2.1"; // Version
+        public override string Version => "1.2.2"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech G923/G29"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -47,7 +47,7 @@ namespace RPMLeds
         SettingsCheckBox _corrisEnabled;
         SettingsCheckBox _modEnabled;
         SettingsHeader _headerFFBA;
-
+        SettingsCheckBox _rpmLedsEnabled;
         #endregion SettingsVars
 
         #region Vars
@@ -71,6 +71,7 @@ namespace RPMLeds
         float maxChangePerSec = 80f;
         float spring = 0f;
         float damper = 0f;
+        bool ledsEnabled = true;
         #endregion
 
         internal static class LogitechManager
@@ -165,6 +166,7 @@ namespace RPMLeds
             _gifuEnabled = Settings.AddCheckBox("_gifuEnabled", "Gifu", true);
             _kekmetEnabled = Settings.AddCheckBox("_kekmetEnabled", "Kekmet", false);
             Settings.AddHeader("RPM Leds");
+            _rpmLedsEnabled = Settings.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, ChangeLedEnable);
             string[] sourceDDSettings = new string[] { "Auto", "Race Tachometer", "Rev Limiter", "Manual" };
             _maxRPMSource = Settings.AddDropDownList("Max RPM Source", "Max Corris RPM Source", sourceDDSettings, OnSelectionChanged: UpdateSource);
             _startPointPercent = Settings.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F);
@@ -180,6 +182,10 @@ namespace RPMLeds
             _damperForceMultiplyAtMaxWheelAngle = Settings.AddSlider("DamperAngle", "Damper Force Multiply At Max Wheel Angle", 1F, 5, 1.4f, visibleByDefault: false);
             _springForce = Settings.AddSlider("SpringForce", "Spring Force", 1, 100, 80, visibleByDefault: false);
             _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true);
+        }
+        private void ChangeLedEnable()
+        {
+            ledsEnabled = _rpmLedsEnabled.GetValue();
         }
         private void TogleAdvancedFFB()
         {
@@ -303,7 +309,9 @@ namespace RPMLeds
 
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
-            ModConsole.Print("Harmony patches applied");
+            ModConsole.Print("Harmony FFB patches applied. Default FFB Disabled");
+
+            ledsEnabled = _rpmLedsEnabled.GetValue();
 
         }
         private void Mod_OnMenuLoad()
@@ -409,7 +417,7 @@ namespace RPMLeds
             var damperMultyplyMaxAngle = _damperForceMultiplyAtMaxWheelAngle.GetValue();
             var maxanglerot = maxSteeringAngle.Value;
 
-            if (currentRPM > 50)
+            if (currentRPM > 50 && ledsEnabled)
             {
                 // --- Determine max RPM
                 float rpm_MAX = RPM_MAX_DEFAULT;
