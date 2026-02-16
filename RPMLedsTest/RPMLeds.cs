@@ -1,9 +1,10 @@
-﻿using HutongGames.PlayMaker;
+﻿using Harmony;
+using HutongGames.PlayMaker;
 using MSCLoader;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using UnityEngine;
-using Harmony;
 
 
 namespace RPMLeds
@@ -13,11 +14,12 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.2.2"; // Version
+        public override string Version => "1.3"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech G923/G29"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
         private HarmonyInstance harmony;
+        private LogitechGSDK.LogiControllerPropertiesData properties;
         public class PartInfo
         {
             public string Path;
@@ -72,6 +74,35 @@ namespace RPMLeds
         float spring = 0f;
         float damper = 0f;
         bool ledsEnabled = true;
+        bool debugIsEnabled = false;
+        bool advancedFFBOn = true;
+
+        bool forceFuncFinish = false;
+        private string propertiesEdit;
+        private string actualState;
+        private string activeForces;
+
+
+        int springForce = 0;
+        float damperLow = 0;
+        float damperHigh = 0;
+        float damperMultyplyMaxAngle = 0;
+        float maxanglerot = 0;
+        float rpm_MAX = RPM_MAX_DEFAULT;
+        float rpm_FIRST_LED = RPM_FIRST_DEFAULT;
+        float startPercent = 0;
+        float maxPercent = 0;
+        float currentRPM = 0;
+        float currentForce = 0;
+        float currentSpeed = 0;
+        bool sorberEnbled = true;
+        bool corrisEnabled = true;
+        bool kekmetEnabled = false;
+        bool taxiEnabled = true;
+        bool gifuenabled = true;
+        float manualRPMMax = RPM_MAX_DEFAULT;
+        float damperTopSpeed = 0;
+
         #endregion
 
         internal static class LogitechManager
@@ -85,11 +116,11 @@ namespace RPMLeds
                     return true;
                 try
                 {
-                    ok = LogitechGSDK.LogiSteeringInitialize(false);
+                    ok = LogitechGSDK.LogiSteeringInitialize(true);
                 }
                 catch
                 {
-                    ModConsole.Print("LogiSteeringInitialize function failed");
+                    ModConsole.Error("LogiSteeringInitialize function failed");
                 }
                  
                 if (ok)
@@ -154,42 +185,88 @@ namespace RPMLeds
         {
             SetupFunction(Setup.OnLoad, Mod_OnLoad);
             SetupFunction(Setup.FixedUpdate, Mod_FixedUpdate);
+            SetupFunction(Setup.Update, Update);
             SetupFunction(Setup.ModSettings, Mod_Settings);
             SetupFunction(Setup.OnMenuLoad, Mod_OnMenuLoad);
+            SetupFunction(Setup.OnGUI, OnGui);
+            SetupFunction(Setup.ModSettingsLoaded, SettingsLoaded);
         }
+        private void SettingsLoaded()
+        {
+            SettingChanged();
+        }
+        private void OnGui()
+        {
+            if (!debugIsEnabled) return;
+            propertiesEdit = GUI.TextArea(new Rect(200f, 10f, 200f, 200f), propertiesEdit, 400);
+            actualState = GUI.TextArea(new Rect(410f, 10f, 300f, 200f), actualState, 1000);
+            activeForces = GUI.TextArea(new Rect(10f, 10f, 180f, 200f), activeForces, 400);
+        }
+
         private void Mod_Settings()
         {
             Settings.AddHeader("Enable for cars");
-            _corrisEnabled = Settings.AddCheckBox("_corrisEnabled", "Corris", true);
-            _sorbetEnabled = Settings.AddCheckBox("_sorbetEnabled", "Sorbet", true);
-            _taxiEnabled = Settings.AddCheckBox("_taxiEnabled", "Taxi", true);
-            _gifuEnabled = Settings.AddCheckBox("_gifuEnabled", "Gifu", true);
-            _kekmetEnabled = Settings.AddCheckBox("_kekmetEnabled", "Kekmet", false);
+            _corrisEnabled = Settings.AddCheckBox("_corrisEnabled", "Corris", true, SettingChanged);
+            _sorbetEnabled = Settings.AddCheckBox("_sorbetEnabled", "Sorbet", true, SettingChanged);
+            _taxiEnabled = Settings.AddCheckBox("_taxiEnabled", "Taxi", true, SettingChanged);
+            _gifuEnabled = Settings.AddCheckBox("_gifuEnabled", "Gifu", true, SettingChanged);
+            _kekmetEnabled = Settings.AddCheckBox("_kekmetEnabled", "Kekmet", false, SettingChanged);
             Settings.AddHeader("RPM Leds");
-            _rpmLedsEnabled = Settings.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, ChangeLedEnable);
+            _rpmLedsEnabled = Settings.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, SettingChanged);
             string[] sourceDDSettings = new string[] { "Auto", "Race Tachometer", "Rev Limiter", "Manual" };
-            _maxRPMSource = Settings.AddDropDownList("Max RPM Source", "Max Corris RPM Source", sourceDDSettings, OnSelectionChanged: UpdateSource);
-            _startPointPercent = Settings.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F);
-            _maxPointPercent = Settings.AddSlider("Max Point", "Max Point Shift", 1f, 100F, 90F);
-            _manualMaxRPM = Settings.AddSlider("Manual MaxRPM", "Manual MaxRPM", 650, 10000, 7000, visibleByDefault: false);
-            _showDebugMSG = Settings.AddCheckBox("_showDebugMSG", "Show debug messages", false);
+            _maxRPMSource = Settings.AddDropDownList("Max RPM Source", "Max Corris RPM Source", sourceDDSettings, OnSelectionChanged: SettingChanged);
+            _startPointPercent = Settings.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F, SettingChanged);
+            _maxPointPercent = Settings.AddSlider("Max Point", "Max Point Shift", 1f, 100F, 90F, SettingChanged);
+            _manualMaxRPM = Settings.AddSlider("Manual MaxRPM", "Manual MaxRPM", 650, 10000, 7000, SettingChanged, visibleByDefault: false);
+            _showDebugMSG = Settings.AddCheckBox("_showDebugMSG", "Show debug window", false, SettingChanged);
             Settings.AddHeader("Enable Advanced FFB");
-            _enableAdvancedFFB = Settings.AddCheckBox("_AdvancedFFB", "Enable", false, onValueChanged:TogleAdvancedFFB);
+            _enableAdvancedFFB = Settings.AddCheckBox("_AdvancedFFB", "Enable", false, SettingChanged);
             _headerFFBA = Settings.AddHeader("Damper settings",visibleByDefault:false);
-            _damperTopSpeed = Settings.AddSlider("Damper TopSpeed", "Top speed (At Speed Minmal Damper Force Reach)", 1F, 250, 80, visibleByDefault: false);
-            _damperForceAtLowSpeed = Settings.AddSlider("DamperFLS", "Force at low speed", 1F, 100, 45, visibleByDefault: false);
-            _damperForceAtHighSpeed = Settings.AddSlider("DamperFHS", "Force at high speed", 1F, 100, 30, visibleByDefault: false);
-            _damperForceMultiplyAtMaxWheelAngle = Settings.AddSlider("DamperAngle", "Damper Force Multiply At Max Wheel Angle", 1F, 5, 1.4f, visibleByDefault: false);
-            _springForce = Settings.AddSlider("SpringForce", "Spring Force", 1, 100, 80, visibleByDefault: false);
-            _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true);
+            _damperTopSpeed = Settings.AddSlider("Damper TopSpeed", "Top speed (At Speed Minmal Damper Force Reach)", 1F, 250, 80, SettingChanged, visibleByDefault: false);
+            _damperForceAtLowSpeed = Settings.AddSlider("DamperFLS", "Force at low speed", 1F, 100, 45, SettingChanged, visibleByDefault: false);
+            _damperForceAtHighSpeed = Settings.AddSlider("DamperFHS", "Force at high speed", 1F, 100, 30, SettingChanged, visibleByDefault: false);
+            _damperForceMultiplyAtMaxWheelAngle = Settings.AddSlider("DamperAngle", "Damper Force Multiply At Max Wheel Angle", 1F, 5, 1.4f, SettingChanged, visibleByDefault: false);
+            _springForce = Settings.AddSlider("SpringForce", "Spring Force", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged);
         }
-        private void ChangeLedEnable()
+        private void SettingChanged()
         {
             ledsEnabled = _rpmLedsEnabled.GetValue();
+            debugIsEnabled = _showDebugMSG.GetValue();
+            advancedFFBOn = _enableAdvancedFFB.GetValue();
+            if (_maxRPMSource.GetSelectedItemName() == "Manual")
+            {
+                _manualMaxRPM.SetVisibility(true);
+            }
+            else
+            {
+                _manualMaxRPM.SetVisibility(false);
+            }
+
+            corrisEnabled = _corrisEnabled.GetValue();
+            sorberEnbled = _sorbetEnabled.GetValue();
+            taxiEnabled = _taxiEnabled.GetValue();
+            gifuenabled = _gifuEnabled.GetValue();
+            kekmetEnabled = _kekmetEnabled.GetValue();
+            springForce = _springForce.GetValue();
+            damperLow = _damperForceAtLowSpeed.GetValue();
+            damperHigh = _damperForceAtHighSpeed.GetValue();
+            damperMultyplyMaxAngle = _damperForceMultiplyAtMaxWheelAngle.GetValue();
+            startPercent = _startPointPercent.GetValue();
+            maxPercent = _maxPointPercent.GetValue();
+            manualRPMMax = _manualMaxRPM.GetValue();
+            damperTopSpeed = _damperTopSpeed.GetValue();
+            TogleAdvancedFFB();
+
+            if (!debugIsEnabled)
+            {
+                propertiesEdit = string.Empty;
+                actualState = string.Empty;
+            }
         }
         private void TogleAdvancedFFB()
         {
-            if(_enableAdvancedFFB.GetValue())
+            if (_enableAdvancedFFB.GetValue())
             {
                 _headerFFBA.SetVisibility(true);
                 _damperTopSpeed.SetVisibility(true);
@@ -209,23 +286,12 @@ namespace RPMLeds
             }
 
         }
-        private void UpdateSource()
-        {
-            if(_maxRPMSource.GetSelectedItemName()== "Manual")
-            {
-                _manualMaxRPM.SetVisibility(true);
-            }
-            else
-            {
-                _manualMaxRPM.SetVisibility(false);
-            }
-        }
         private PartInfo InitPartValue(string Name, string Path, string VaribleName, string FSMName = "Data")
         {
             var gameObj = GameObject.Find(Path);
             if (gameObj == null)
             {
-                if (_showDebugMSG.GetValue())
+                if (debugIsEnabled)
                     ModConsole.Log($"Part {Name}\n On Path {Path}\n Not found. Skip");
                 return null;
             }
@@ -234,7 +300,7 @@ namespace RPMLeds
             var dataFSM = gameObj.GetComponents<PlayMakerFSM>().Where(x => x.FsmName == FSMName).First();
             if (dataFSM == null)
             {
-                if (_showDebugMSG.GetValue())
+                if (debugIsEnabled)
                     ModConsole.Log($"For Part {Name} Data FSM Not found. Skip");
                 return null;
             }
@@ -242,7 +308,7 @@ namespace RPMLeds
             var installed = dataFSM.GetVariable<FsmBool>("Installed");
             if (value == null)
             {
-                if (_showDebugMSG.GetValue())
+                if (debugIsEnabled)
                     ModConsole.Log($"Value with {VaribleName} Not found. Skip");
                 return null;
             }
@@ -298,36 +364,34 @@ namespace RPMLeds
             };
 
             Sorbet = RegularCarInfo.initCar("SORBET(190-200psi)");
-            Gifu = RegularCarInfo.initCar("JOBS/TAXIJOB/MACHTWAGEN");
-            Taxi = RegularCarInfo.initCar("GIFU(750/450psi)");
+            Taxi = RegularCarInfo.initCar("JOBS/TAXIJOB/MACHTWAGEN");
+            Gifu = RegularCarInfo.initCar("GIFU(750/450psi)");
 
             if (_maxRPMSource.GetSelectedItemName() == "Manual")
             {
                 _manualMaxRPM.SetVisibility(true);
             }
             TogleAdvancedFFB();
-
+            SettingChanged();
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
-            ModConsole.Print("Harmony FFB patches applied. Default FFB Disabled");
+            ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
 
-            ledsEnabled = _rpmLedsEnabled.GetValue();
 
         }
         private void Mod_OnMenuLoad()
         {
+            TogleAdvancedFFB();
+            SettingChanged();
+
             if (LogitechManager.Initialize())
             {
-                if (_showDebugMSG.GetValue())
-                    ModConsole.Print("Logitech initialized successfully");
+                ModConsole.Print("RPMLed - Logitech initialized successfully");
             }
             else
             {
-                if (_showDebugMSG.GetValue())
-                    ModConsole.Print("Logitech init failed");
+                ModConsole.Error("RPMLed - Logitech init failed");
             }
-            TogleAdvancedFFB();
-
         }
         public bool forcesIsZero = true;
         private void SetForcesToZero()
@@ -340,7 +404,7 @@ namespace RPMLeds
         }
         private void Mod_FixedUpdate()
         {
-
+            forceFuncFinish = false;
             if (string.IsNullOrEmpty(currentVeh.Value))
             {
                 if (!forcesIsZero)
@@ -352,18 +416,16 @@ namespace RPMLeds
 
             if (!LogitechGSDK.LogiUpdate()) return;
 
-            float currentRPM = 0;
-            float currentForce = 0;
-            float currentSpeed = 0;
+
             bool isCorris = false;
-            switch(currentVeh.Value)
+            switch (currentVeh.Value)
             {
                 case "Corris":
                     currentRPM = carRPM.Value;
                     currentForce = FFBComp.force;
                     currentSpeed = carSpeed.Value;
                     isCorris = true;
-                    if (!_corrisEnabled.GetValue())
+                    if (!corrisEnabled)
                     {
                         SetForcesToZero();
                         return;
@@ -373,7 +435,7 @@ namespace RPMLeds
                     currentRPM = Sorbet.DTComp.rpm;
                     currentForce = Sorbet.FFBComp.force;
                     currentSpeed = Mathf.Abs(Sorbet.DTComp.differentialSpeed);
-                    if (!_sorbetEnabled.GetValue())
+                    if (!sorberEnbled)
                     {
                         SetForcesToZero();
                         return;
@@ -383,7 +445,7 @@ namespace RPMLeds
                     currentRPM = Kekmet.RPM.Value;
                     currentForce = Kekmet.FFBComp.force;
                     currentSpeed = Kekmet.Speed.Value;
-                    if (!_kekmetEnabled.GetValue())
+                    if (!kekmetEnabled)
                     {
                         SetForcesToZero();
                         return;
@@ -393,7 +455,7 @@ namespace RPMLeds
                     currentRPM = Taxi.DTComp.rpm;
                     currentForce = Taxi.FFBComp.force;
                     currentSpeed = Mathf.Abs(Taxi.DTComp.differentialSpeed);
-                    if (!_taxiEnabled.GetValue())
+                    if (!taxiEnabled)
                     {
                         SetForcesToZero();
                         return;
@@ -403,7 +465,7 @@ namespace RPMLeds
                     currentRPM = Gifu.DTComp.rpm;
                     currentForce = Gifu.FFBComp.force;
                     currentSpeed = Mathf.Abs(Gifu.DTComp.differentialSpeed);
-                    if (!_gifuEnabled.GetValue())
+                    if (!gifuenabled)
                     {
                         SetForcesToZero();
                         return;
@@ -411,21 +473,16 @@ namespace RPMLeds
                     break;
             }
 
-            var springForce = _springForce.GetValue();
-            var damperLow = _damperForceAtLowSpeed.GetValue();
-            var damperHigh = _damperForceAtHighSpeed.GetValue();
-            var damperMultyplyMaxAngle = _damperForceMultiplyAtMaxWheelAngle.GetValue();
-            var maxanglerot = maxSteeringAngle.Value;
+            maxanglerot = maxSteeringAngle.Value;
 
             if (currentRPM > 50 && ledsEnabled)
             {
                 // --- Determine max RPM
-                float rpm_MAX = RPM_MAX_DEFAULT;
-                float rpm_FIRST_LED = RPM_FIRST_DEFAULT;
-                float startPercent = _startPointPercent.GetValue();
-                float maxPercent = _maxPointPercent.GetValue();
-                
-                if(isCorris)
+
+                rpm_MAX = RPM_MAX_DEFAULT;
+                rpm_FIRST_LED = RPM_FIRST_DEFAULT;
+
+                if (isCorris)
                     switch (_maxRPMSource.GetSelectedItemIndex())
                     {
                         case 0: // Auto
@@ -445,10 +502,9 @@ namespace RPMLeds
                                 rpm_MAX = revLimit.PartValue.Value;
                             break;
                         case 3: // Manual
-                            rpm_MAX = _manualMaxRPM.GetValue();
+                            rpm_MAX = manualRPMMax;
                             break;
                     }
-
                 rpm_FIRST_LED = rpm_MAX * (startPercent / 100f);
                 float shiftPoint = rpm_MAX * (maxPercent / 100f);
                 LogitechGSDK.LogiPlayLeds(0, currentRPM, rpm_FIRST_LED, shiftPoint);
@@ -459,9 +515,7 @@ namespace RPMLeds
             float delta = maxChangePerSec * Time.deltaTime;
             currentForce = Mathf.MoveTowards(currentForce, targetForce, delta);
             currentForce = Mathf.Clamp(currentForce, -100f, 100f); // clamp to valid range
-            if (_showDebugMSG.GetValue())
-                ModConsole.Log($"Force to wheel {(int)targetForce} Speed {currentSpeed.ToString("0.0")} RPM {currentRPM.ToString("0.0")}");
-            if (_enableAdvancedFFB.GetValue())
+            if (advancedFFBOn)
             {
                 // --- Steering angle
                 var state = LogitechGSDK.LogiGetStateCSharp(0);
@@ -470,7 +524,7 @@ namespace RPMLeds
 
                 // --- Speed
                 float speed = currentSpeed;
-                float speed01 = Mathf.Clamp01(speed / _damperTopSpeed.GetValue()); // normalize 0–1
+                float speed01 = Mathf.Clamp01(speed / damperTopSpeed); // normalize 0–1
 
                 // --- Damper (heavy at low speed → lighter at high speed)
                 float targetDamper = Mathf.Lerp(damperLow, damperHigh, speed01);
@@ -493,9 +547,85 @@ namespace RPMLeds
                     LogitechGSDK.LogiPlayDamperForce(0, (int)damper);
                 }
             }
-            LogitechGSDK.LogiPlayConstantForce(0, (int)targetForce);
 
+            LogitechGSDK.LogiPlayConstantForce(0, (int)targetForce);        
             forcesIsZero = false;
+            forceFuncFinish = true;
+
         }
+        private void Update()
+        {
+            if (!debugIsEnabled) return;
+
+            if (LogitechGSDK.LogiUpdate() && LogitechGSDK.LogiIsConnected(0))
+            {
+                StringBuilder stringBuilder = new StringBuilder(256);
+                LogitechGSDK.LogiGetFriendlyProductName(0, stringBuilder, 256);
+                propertiesEdit = string.Concat("Current Controller : ", stringBuilder, "\n");
+                propertiesEdit += "Current controller properties : \n\n";
+                LogitechGSDK.LogiControllerPropertiesData logiControllerPropertiesData = default(LogitechGSDK.LogiControllerPropertiesData);
+                LogitechGSDK.LogiGetCurrentControllerProperties(0, ref logiControllerPropertiesData);
+                string text = propertiesEdit;
+                propertiesEdit = text + "forceEnable = " + logiControllerPropertiesData.forceEnable + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "overallGain = " + logiControllerPropertiesData.overallGain + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "springGain = " + logiControllerPropertiesData.springGain + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "damperGain = " + logiControllerPropertiesData.damperGain + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "defaultSpringEnabled = " + logiControllerPropertiesData.defaultSpringEnabled + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "combinePedals = " + logiControllerPropertiesData.combinePedals + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "wheelRange = " + logiControllerPropertiesData.wheelRange + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "gameSettingsEnabled = " + logiControllerPropertiesData.gameSettingsEnabled + "\n";
+                text = propertiesEdit;
+                propertiesEdit = text + "allowGameSettings = " + logiControllerPropertiesData.allowGameSettings + "\n";
+                actualState = "Steering wheel current state : \n\n";
+                LogitechGSDK.DIJOYSTATE2ENGINES dIJOYSTATE2ENGINES = LogitechGSDK.LogiGetStateCSharp(0);
+                text = actualState;
+                actualState = text + "Wheel position:" + dIJOYSTATE2ENGINES.lX + "\n";
+                text = actualState;
+                actualState = text + "Throttle:" + dIJOYSTATE2ENGINES.lY + "\n";
+                text = actualState;
+                actualState = text + "Brake:" + dIJOYSTATE2ENGINES.lRz + "\n";
+                text = actualState;
+                actualState = text + "Clutch:" + dIJOYSTATE2ENGINES.rglSlider[0] + "\n";
+                text = actualState;
+                actualState = text + "z-axis position :" + dIJOYSTATE2ENGINES.lZ + "\n";
+                text = actualState;
+                actualState = text + "x-axis rotation :" + dIJOYSTATE2ENGINES.lRx + "\n";
+                text = actualState;
+                actualState = text + "y-axis rotation :" + dIJOYSTATE2ENGINES.lRy + "\n";
+                text = actualState;
+                actualState = text + "extra axes positions 2 :" + dIJOYSTATE2ENGINES.rglSlider[1] + "\n";
+                text = actualState;
+
+                activeForces = "Active values:\n";
+
+                activeForces +=  $"Vanilia force = {currentForce}\n";
+                activeForces += $"Logi force = {currentForce / 100}\n";
+                activeForces += $"Car: {currentVeh.Value}\n";
+                activeForces += $"Car speed: {currentSpeed.ToString("0.00")}\n";
+                activeForces += $"RPM = {currentRPM.ToString("0.00")}\n";
+                activeForces += $"Spring force = {springForce}\n";
+                activeForces += $"Damper force = {damper}\n";
+                activeForces += $"Forces is zero: {forcesIsZero}\n";
+                activeForces += $"Force function finish: {forceFuncFinish}\n";
+            }
+
+            else if (!LogitechGSDK.LogiIsConnected(0))
+            {
+                actualState = "PLEASE PLUG IN A STEERING WHEEL OR A FORCE FEEDBACK CONTROLLER";
+            }
+            else
+            {
+                actualState = "THIS WINDOW NEEDS TO BE IN FOREGROUND IN ORDER FOR THE SDK TO WORK PROPERLY";
+            }
+        }
+
     }
 }
+
