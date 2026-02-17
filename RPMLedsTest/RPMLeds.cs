@@ -267,6 +267,7 @@ namespace RPMLeds
             actualState = GUI.TextArea(new Rect(410f, 10f, 300f, 350f), actualState, 1000);
             activeForces = GUI.TextArea(new Rect(10f, 10f, 180f, 350f), activeForces, 400);
         }
+
         private void Mod_Settings()
         {
             Settings.AddHeader("Enable for cars");
@@ -653,10 +654,6 @@ namespace RPMLeds
 
                 if (currentSpeed > 0.05f)
                 {
-                    if (currentSpeed < 10)
-                        LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
-                    else
-                        LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, (int)damper);
 
                     if(countersteeringEnabled)
                     {
@@ -707,11 +704,13 @@ namespace RPMLeds
 
                         offsetPercentage = Mathf.Clamp(offsetPercentage, -95, 95);
                     }
-
-                    LogitechGSDK.LogiPlaySpringForce(_CONTROLLERINDEX, offsetPercentage, springForce, );
+                    LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
+                    LogitechGSDK.LogiPlaySoftstopForce(_CONTROLLERINDEX, 90);
+                    LogitechGSDK.LogiPlaySpringForce(_CONTROLLERINDEX, offsetPercentage, springForce, springCenter);
                 }
                 else
                 {
+
                     LogitechGSDK.LogiStopSpringForce(_CONTROLLERINDEX);
                     LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, (int)damper);
                 }
