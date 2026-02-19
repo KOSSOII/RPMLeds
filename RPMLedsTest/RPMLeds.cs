@@ -1,6 +1,7 @@
 ﻿using Harmony;
 using HutongGames.PlayMaker;
 using MSCLoader;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -22,7 +23,6 @@ namespace RPMLeds
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
         private HarmonyInstance harmony;
-        public static int slipForce = 0;
         public class PartInfo
         {
             public string Path;
@@ -32,9 +32,11 @@ namespace RPMLeds
         }
 
         #region SettingsVars
-        SettingsSliderInt _csmtlp;
-        SettingsCheckBox _csEnabled;
-        SettingsCheckBox _csInvert;
+
+        SettingsSlider _ffbSpringMoveBoost;
+        SettingsSlider _ffbSpringBoostSpeed;
+        SettingsSlider _ffbSpringLockBoost;
+        SettingsSlider _ffbSpringLockStart;
 
         SettingsCheckBox _showDebugMSG;
         SettingsCheckBox _enableAdvancedFFB;
@@ -42,25 +44,12 @@ namespace RPMLeds
         SettingsSliderInt _manualMaxRPM;
         SettingsSlider _startPointPercent;
         SettingsSlider _maxPointPercent;
-        SettingsSlider _damperTopSpeed;
-        SettingsSlider _damperForceAtLowSpeed;
-        SettingsSlider _damperForceAtHighSpeed;
-        SettingsSlider _damperForceMultiplyAtMaxWheelAngle;
-        SettingsSliderInt _springForce;
         SettingsCheckBox _colisionsEnabled;
         SettingsSliderInt _colisionForce;
         SettingsSlider _colisionForceMltpy;
         SettingsSliderInt _controllerIndex;
-
-        SettingsSliderInt _disableVanilaForceAtSpeed;
-        SettingsCheckBox _disableVanilaForceAtSpeedEnabled;
-        SettingsCheckBox _disableVanillaForce;
-
         SettingsCheckBox _modEnabled;
-        SettingsHeader _headerFFBA;
         SettingsCheckBox _rpmLedsEnabled;
-
-
         SettingsCheckBox _profilerEnabled;
         SettingsSliderInt _profilerWheelMaxRange;
         SettingsCheckBox _profilerForceEnabled;
@@ -71,11 +60,43 @@ namespace RPMLeds
         SettingsCheckBox _profilerCombinedPedals;
         SettingsCheckBox _profilerDefaultSpringEnabled;
         SettingsSliderInt _profilerDefaultSpringGain;
+        SettingsSlider _ffbMaxForce;
         SettingsButton _applyProffilerSettings;
-        SettingsSliderInt testspringOffset;
-        SettingsSliderInt testspringSaturation;
-        SettingsSliderInt testSpringCofi;
+
         #endregion SettingsVars
+
+        #region SettingsVars_FFBAdvanced
+        // Advanced ConstantForce FFB settings (your new system)
+        SettingsCheckBox _advFFBEnabled;
+
+        SettingsSlider _ffbTorqueScale;
+
+
+        SettingsSlider _ffbSteeringSpring;
+        SettingsSlider _ffbSteeringFriction;
+        SettingsSlider _ffbFrictionDeadVel;
+
+        SettingsSlider _ffbDamperStop;
+        SettingsSlider _ffbDamperRoll;
+        SettingsSlider _ffbDamperFast;
+        SettingsSlider _ffbDamperLowSpeed;
+        SettingsSlider _ffbDamperHighSpeed;
+
+        SettingsSlider _ffbMzNormalize;
+        SettingsSlider _ffbMzSoftPower;
+
+        SettingsSlider _ffbTorqueSmoothing;
+        SettingsSlider _ffbSoftLimitK;
+        SettingsSlider _ffbRateUpPerSec;
+        SettingsSlider _ffbRateDownPerSec;
+
+        SettingsSlider _ffbMinNormalForceForFFB;
+        SettingsSlider _ffbAirHardReleasePerSec;
+        SettingsSlider _ffbAirFilterReset;
+        SettingsSlider _ffbLandInTime;
+
+        SettingsCheckBox _ffbInvertForce;
+        #endregion
 
         #region Vars
         FsmFloat maxSteeringAngle;
@@ -88,7 +109,6 @@ namespace RPMLeds
         const float RPM_FIRST_DEFAULT = 5000f;
         static int colisionForceMax = 0;
         public static bool ffbColisionsEnabled = true;
-        float damper = 0f;
         bool ledsEnabled = true;
         bool debugIsEnabled = false;
         static bool advancedFFBOn = true;
@@ -98,12 +118,10 @@ namespace RPMLeds
         private string actualState;
         private string activeForces;
         public static int _CONTROLLERINDEX = 0;
+        public bool forcesIsZero = true;
+        Dictionary<string,float> _DEBUGVALS = new Dictionary<string,float>();
         LogitechGSDK.LogiControllerPropertiesData logiControllerPropertiesData = new LogitechGSDK.LogiControllerPropertiesData();
-        int springForce = 0;
-        float damperLow = 0;
-        float damperHigh = 0;
-        float damperMultyplyMaxAngle = 0;
-        float maxanglerot = 0;
+
         float rpm_MAX = RPM_MAX_DEFAULT;
         float rpm_FIRST_LED = RPM_FIRST_DEFAULT;
         float startPercent = 0;
@@ -112,19 +130,14 @@ namespace RPMLeds
         float currentForce = 0;
         float currentSpeed = 0;
         float manualRPMMax = RPM_MAX_DEFAULT;
-        float damperTopSpeed = 0;
         int settingsRPMSource = 0;
         float targetForce = 0;
-        bool vaniliaForceApplied = false;
-        bool vanillaForceDisable = false;
-        bool vanillaForceDisableAtSpeed = false;
-        int speedVanilaForceDisable = 0;
+
         static float colisionForceMultiply = 1;
         static bool inCar = false;
         public static int collisionForceSetted = 0;
         public bool countersteeringEnabled = false;
-        int countersteeringmtlpy = 1;
-        bool inverCS = false;
+
 
         RegularCarInfo CURRENTCAR;
         #endregion
@@ -204,48 +217,6 @@ namespace RPMLeds
         }
         #endregion
 
-        #region Colider
-        public class FFBColision : MonoBehaviour
-        {
-            private float collisionForce = 0;
-            private bool playEffect = false;
-            void OnCollisionEnter(Collision collision)
-            {
-                if(ffbColisionsEnabled && advancedFFBOn && inCar)
-                {
-                    if (collision.gameObject.layer == 0 /*Default*/ || collision.gameObject.layer == 18 /*Cars?*/)
-                    {
-
-                        collisionForce = collision.relativeVelocity.magnitude;
-                        playEffect = true;
-                    }
-                }
-            }
-            void FixedUpdate()
-            {
-                if (!inCar)
-                {
-                    playEffect = false;
-                    return;
-                }              
-
-                if (!playEffect)
-                    return;
-    
-                PlayLogitechEffect(collisionForce);
-                playEffect = false;
-            }
-            void PlayLogitechEffect(float force)
-            {
-                var clampedForce = Mathf.Clamp(force * colisionForceMultiply, 0, colisionForceMax);
-                int strength = Mathf.RoundToInt(clampedForce);
-                collisionForceSetted = strength;
-                LogitechGSDK.LogiPlayFrontalCollisionForce(_CONTROLLERINDEX, strength);
-            }
-
-        }
-        #endregion
-
         public override void ModSetup()
         {
             SetupFunction(Setup.OnLoad, Mod_OnLoad);
@@ -260,6 +231,75 @@ namespace RPMLeds
         {
             SettingChanged();
         }
+        private void FFBSettingsChanged()
+        {
+            bool advOn = _enableAdvancedFFB.GetValue(); // <-- keep only this
+
+            _ffbSpringMoveBoost.SetVisibility(advOn);
+            _ffbSpringBoostSpeed.SetVisibility(advOn);
+            _ffbSpringLockBoost.SetVisibility(advOn);
+            _ffbSpringLockStart.SetVisibility(advOn);
+
+            springMoveBoost = _ffbSpringMoveBoost.GetValue();
+            springBoostSpeed = _ffbSpringBoostSpeed.GetValue();
+            springLockBoost = _ffbSpringLockBoost.GetValue();
+            springLockStart = _ffbSpringLockStart.GetValue();
+
+            _ffbTorqueScale.SetVisibility(advOn);
+            _ffbMaxForce.SetVisibility(advOn);
+            _ffbInvertForce.SetVisibility(advOn);
+
+            _ffbSteeringSpring.SetVisibility(advOn);
+            _ffbSteeringFriction.SetVisibility(advOn);
+            _ffbFrictionDeadVel.SetVisibility(advOn);
+
+            _ffbDamperStop.SetVisibility(advOn);
+            _ffbDamperRoll.SetVisibility(advOn);
+            _ffbDamperFast.SetVisibility(advOn);
+            _ffbDamperLowSpeed.SetVisibility(advOn);
+            _ffbDamperHighSpeed.SetVisibility(advOn);
+
+            _ffbMzNormalize.SetVisibility(advOn);
+            _ffbMzSoftPower.SetVisibility(advOn);
+
+            _ffbTorqueSmoothing.SetVisibility(advOn);
+            _ffbSoftLimitK.SetVisibility(advOn);
+            _ffbRateUpPerSec.SetVisibility(advOn);
+            _ffbRateDownPerSec.SetVisibility(advOn);
+
+            _ffbMinNormalForceForFFB.SetVisibility(advOn);
+            _ffbAirHardReleasePerSec.SetVisibility(advOn);
+            _ffbAirFilterReset.SetVisibility(advOn);
+            _ffbLandInTime.SetVisibility(advOn);
+
+            // Apply values into runtime variables
+            steeringSpring = _ffbSteeringSpring.GetValue();
+            steeringFriction = _ffbSteeringFriction.GetValue();
+            frictionDeadVel = _ffbFrictionDeadVel.GetValue();
+
+            damperStop = _ffbDamperStop.GetValue();
+            damperRoll = _ffbDamperRoll.GetValue();
+            damperFast = _ffbDamperFast.GetValue();
+            damperLowSpeed = _ffbDamperLowSpeed.GetValue();
+            damperHighSpeed = _ffbDamperHighSpeed.GetValue();
+
+            mzNormalize = _ffbMzNormalize.GetValue();
+            mzSoftPower = _ffbMzSoftPower.GetValue();
+
+            torqueScale = _ffbTorqueScale.GetValue();
+            maxForce = _ffbMaxForce.GetValue();
+            torqueSmoothing = _ffbTorqueSmoothing.GetValue();
+            softLimitK = _ffbSoftLimitK.GetValue();
+            rateUpPerSec = _ffbRateUpPerSec.GetValue();
+            rateDownPerSec = _ffbRateDownPerSec.GetValue();
+
+            minNormalForceForFFB = _ffbMinNormalForceForFFB.GetValue();
+            airHardReleasePerSec = _ffbAirHardReleasePerSec.GetValue();
+            airFilterReset = _ffbAirFilterReset.GetValue();
+            landInTime = _ffbLandInTime.GetValue();
+
+            forceInvert = _ffbInvertForce.GetValue();
+        }
         private void OnGui()
         {
             if (!debugIsEnabled) return;
@@ -267,42 +307,71 @@ namespace RPMLeds
             actualState = GUI.TextArea(new Rect(410f, 10f, 300f, 350f), actualState, 1000);
             activeForces = GUI.TextArea(new Rect(10f, 10f, 180f, 350f), activeForces, 400);
         }
+        private void FFBAdvancedSettings()
+        {
+            Settings.AddHeader("Advanced FFB Settings");
 
+            _ffbTorqueScale = Settings.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 5f, 0.07f, SettingChanged, visibleByDefault: false);
+            _ffbMaxForce = Settings.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 50f, SettingChanged, visibleByDefault: false);
+            _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", false, SettingChanged, visibleByDefault: false);
+
+            _ffbSteeringSpring = Settings.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 4f, SettingChanged, visibleByDefault: false);
+            _ffbSteeringFriction = Settings.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 1.1f, SettingChanged, visibleByDefault: false);
+            _ffbFrictionDeadVel = Settings.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.01f, SettingChanged, visibleByDefault: false);
+
+            _ffbSpringMoveBoost = Settings.AddSlider("_ffbSpringMoveBoost","Spring Boost While Moving",0f, 100f, 2.5f,SettingChanged,visibleByDefault: false);
+
+            _ffbSpringBoostSpeed = Settings.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",0.1f, 30f, 6f,SettingChanged,visibleByDefault: false);
+
+            _ffbSpringLockBoost = Settings.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 2.0f, SettingChanged,visibleByDefault: false);
+
+            _ffbSpringLockStart = Settings.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0.2f, 0.95f, 0.6f,SettingChanged, visibleByDefault: false);
+
+            _ffbDamperStop = Settings.AddSlider("_ffbDamperStop", "Damper Stop", 0f, 2f, 0.8f, SettingChanged, visibleByDefault: false);
+            _ffbDamperRoll = Settings.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
+            _ffbDamperFast = Settings.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 2f, 0.85f, SettingChanged, visibleByDefault: false);
+            _ffbDamperLowSpeed = Settings.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed", 0f, 50f, 6f, SettingChanged, visibleByDefault: false);
+            _ffbDamperHighSpeed = Settings.AddSlider("_ffbDamperHighSpeed", "Damper High Speed", 0f, 50f, 25f, SettingChanged, visibleByDefault: false);
+
+            _ffbMzNormalize = Settings.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 1000f, SettingChanged, visibleByDefault: false);
+            _ffbMzSoftPower = Settings.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.7f, SettingChanged, visibleByDefault: false);
+
+            _ffbTorqueSmoothing = Settings.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.08f, SettingChanged, visibleByDefault: false);
+            _ffbSoftLimitK = Settings.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 10f, 0.04f, SettingChanged, visibleByDefault: false);
+            _ffbRateUpPerSec = Settings.AddSlider("_ffbRateUpPerSec", "Rate Up / sec", 0f, 2000f, 450f, SettingChanged, visibleByDefault: false);
+            _ffbRateDownPerSec = Settings.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
+
+            _ffbMinNormalForceForFFB = Settings.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 1000f, SettingChanged, visibleByDefault: false);
+            _ffbAirHardReleasePerSec = Settings.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 8000f, SettingChanged, visibleByDefault: false);
+            _ffbAirFilterReset = Settings.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
+            _ffbLandInTime = Settings.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
+        }
         private void Mod_Settings()
         {
             Settings.AddHeader("Enable for cars");
             Settings.AddHeader("RPM Leds");
             _rpmLedsEnabled = Settings.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, SettingChanged);
+
             string[] sourceDDSettings = new string[] { "Auto", "Race Tachometer", "Rev Limiter", "Manual" };
             _maxRPMSource = Settings.AddDropDownList("Max RPM Source", "Max Corris RPM Source", sourceDDSettings, OnSelectionChanged: SettingChanged);
+
             _startPointPercent = Settings.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F, SettingChanged);
             _maxPointPercent = Settings.AddSlider("Max Point", "Max Point Shift", 1f, 100F, 90F, SettingChanged);
             _manualMaxRPM = Settings.AddSlider("Manual MaxRPM", "Manual MaxRPM", 650, 10000, 7000, SettingChanged, visibleByDefault: false);
+
             Settings.AddHeader("Enable Advanced FFB");
             _enableAdvancedFFB = Settings.AddCheckBox("_AdvancedFFB", "Enable", false, SettingChanged);
-            _headerFFBA = Settings.AddHeader("Damper settings",visibleByDefault:false);
-            _damperTopSpeed = Settings.AddSlider("Damper TopSpeed", "Top speed (At Speed Minmal Damper Force Reach)", 1F, 250, 80, SettingChanged, visibleByDefault: false);
-            _damperForceAtLowSpeed = Settings.AddSlider("DamperFLS", "Force at low speed", 1F, 100, 45, SettingChanged, visibleByDefault: false);
-            _damperForceAtHighSpeed = Settings.AddSlider("DamperFHS", "Force at high speed", 1F, 100, 30, SettingChanged, visibleByDefault: false);
-            _damperForceMultiplyAtMaxWheelAngle = Settings.AddSlider("DamperAngle", "Damper Force Multiply At Max Wheel Angle", 1F, 5, 1.4f, SettingChanged, visibleByDefault: false);
-            _springForce = Settings.AddSlider("SpringForce", "Spring Force", 1, 100, 80, SettingChanged, visibleByDefault: false);
+
+            
+            FFBAdvancedSettings();
+
             _colisionsEnabled = Settings.AddCheckBox("_colisionsEnabled", "Colision Force", true, SettingChanged);
             _colisionForce = Settings.AddSlider("_colisionForce", "Max. Collision Force", 1, 100, 55, SettingChanged, visibleByDefault: false);
             _colisionForceMltpy = Settings.AddSlider("_colisionForceMltpy", "Collision Force Multiply", 1f, 60f, 15f, SettingChanged, visibleByDefault: false);
 
-            _csEnabled = Settings.AddCheckBox("_csEnabled", "Enable Countersteering Force", false, SettingChanged, visibleByDefault: false);
-            _csmtlp = Settings.AddSlider("_csmtlp", "Countersteering Force Multiply", 1, 200, 50, SettingChanged, visibleByDefault: false);
-            _csInvert = Settings.AddCheckBox("_csInvert", "Invert Force", false, SettingChanged, visibleByDefault: false);
-
-            _disableVanillaForce = Settings.AddCheckBox("_disableVanillaForce", "Disable Vanilla Force", false, SettingChanged);
-            Settings.AddText("Prevent wheel wooble at speed but disable vanila forces");
-            _disableVanilaForceAtSpeedEnabled = Settings.AddCheckBox("_disableVanilaForceAtSpeedEnabled", "Disable Vanilla Force At Speed", false, SettingChanged);
-            _disableVanilaForceAtSpeed = Settings.AddSlider("_disableVanilaForceAtSpeed", "Vanilla Force Speed Disable", 1, 255, 20, SettingChanged, visibleByDefault: false);
-
-
             Settings.AddHeader("Properties for Profiler (LGS)");
             Settings.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
-            _profilerEnabled = Settings.AddCheckBox("_profilerEnabled", "Settings Enabled", false, SettingChanged,visibleByDefault:true);
+            _profilerEnabled = Settings.AddCheckBox("_profilerEnabled", "Settings Enabled", false, SettingChanged, visibleByDefault: true);
             _profilerWheelMaxRange = Settings.AddSlider("_profilerWheelMaxRange", "Default Spring Gain", 90, 900, 900, SettingChanged, visibleByDefault: false);
             _profilerForceEnabled = Settings.AddCheckBox("_profilerForceEnabled", "Force Feedback Enabled", true, SettingChanged, visibleByDefault: false);
             _profilerOverallGain = Settings.AddSlider("_profilerOverallGain", "Overall Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
@@ -312,135 +381,60 @@ namespace RPMLeds
             _profilerCombinedPedals = Settings.AddCheckBox("_profilerCombinedPedals", "Combined Pedals", true, SettingChanged, visibleByDefault: false);
             _profilerDefaultSpringEnabled = Settings.AddCheckBox("_profilerDefaultSpringEnabled", "Default Spring Enabled", true, SettingChanged, visibleByDefault: false);
             _profilerDefaultSpringGain = Settings.AddSlider("_profilerDefaultSpringGain", "Default Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _applyProffilerSettings = Settings.AddButton("Save profiler settings",applyProfiler,visibleByDefault:false);
+            _applyProffilerSettings = Settings.AddButton("Save profiler settings", applyProfiler, visibleByDefault: false);
+
             Settings.AddHeader("Debug and Controller");
             _showDebugMSG = Settings.AddCheckBox("_showDebugMSG", "Show debug window", false, SettingChanged);
             Settings.AddText("If the controller shown in the debug window is incorrect, try changing the controller index used for detection. After adjusting the index, restart the game and check again.");
             _controllerIndex = Settings.AddSlider("_controllerIndex", "Controller index", 0, 10, 0, SettingChanged, visibleByDefault: true);
+
             _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged);
         }
+
         private void SettingChanged()
         {
+            FFBSettingsChanged();
 
-            vanillaForceDisable = _disableVanillaForce.GetValue();
-            vanillaForceDisableAtSpeed = _disableVanilaForceAtSpeedEnabled.GetValue();
-            speedVanilaForceDisable = _disableVanilaForceAtSpeed.GetValue();
 
             _CONTROLLERINDEX = _controllerIndex.GetValue();
             ledsEnabled = _rpmLedsEnabled.GetValue();
             debugIsEnabled = _showDebugMSG.GetValue();
             advancedFFBOn = _enableAdvancedFFB.GetValue();
-            if (_maxRPMSource.GetSelectedItemName() == "Manual")
-            {
-                _manualMaxRPM.SetVisibility(true);
-            }
-            else
-            {
-                _manualMaxRPM.SetVisibility(false);
-            }
-            springForce = _springForce.GetValue();
-            damperLow = _damperForceAtLowSpeed.GetValue();
-            damperHigh = _damperForceAtHighSpeed.GetValue();
-            damperMultyplyMaxAngle = _damperForceMultiplyAtMaxWheelAngle.GetValue();
+
+            _manualMaxRPM.SetVisibility(_maxRPMSource.GetSelectedItemName() == "Manual");
+
             startPercent = _startPointPercent.GetValue();
             maxPercent = _maxPointPercent.GetValue();
             manualRPMMax = _manualMaxRPM.GetValue();
-            damperTopSpeed = _damperTopSpeed.GetValue();
             settingsRPMSource = _maxRPMSource.GetSelectedItemIndex();
-            TogleAdvancedFFB();
 
-            countersteeringEnabled = _csEnabled.GetValue();
-            _csEnabled.SetVisibility(_enableAdvancedFFB.GetValue());
-            _csInvert.SetVisibility(countersteeringEnabled);
-            _csmtlp.SetVisibility(countersteeringEnabled);
+            ffbColisionsEnabled = _colisionsEnabled.GetValue();
+            _colisionForce.SetVisibility(ffbColisionsEnabled);
+            _colisionForceMltpy.SetVisibility(ffbColisionsEnabled);
+            colisionForceMax = _colisionForce.GetValue();
+            colisionForceMultiply = _colisionForceMltpy.GetValue();
 
-            countersteeringmtlpy = _csmtlp.GetValue();
-            inverCS = _csInvert.GetValue();
-
-            if (_colisionsEnabled.GetValue())
-            {
-                ffbColisionsEnabled = true;
-                _colisionForce.SetVisibility(true);
-                _colisionForceMltpy.SetVisibility(true);
-                colisionForceMax = _colisionForce.GetValue();
-                colisionForceMultiply = _colisionForceMltpy.GetValue();
-            }
-            else
-            {
-                ffbColisionsEnabled = false;
-                _colisionForce.SetVisibility(true);
-                _colisionForceMltpy.SetVisibility(false);
-
-            }
-
-            if (_profilerEnabled.GetValue())
-            {
-                _profilerWheelMaxRange.SetVisibility(true);
-                _profilerForceEnabled.SetVisibility(true);
-                _profilerOverallGain.SetVisibility(true);
-                _profilerSpringllGain.SetVisibility(true);
-                _profilerDamperGain.SetVisibility(true);
-                _profilerAllowGameSettings.SetVisibility(true);
-                _profilerCombinedPedals.SetVisibility(true);
-                _profilerDefaultSpringEnabled.SetVisibility(true);
-                _profilerDefaultSpringGain.SetVisibility(true);
-                _applyProffilerSettings.SetVisibility(true);
-            }
-            else
-            {
-                _profilerWheelMaxRange.SetVisibility(false);
-                _profilerForceEnabled.SetVisibility(false);
-                _profilerOverallGain.SetVisibility(false);
-                _profilerSpringllGain.SetVisibility(false);
-                _profilerDamperGain.SetVisibility(false);
-                _profilerAllowGameSettings.SetVisibility(false);
-                _profilerCombinedPedals.SetVisibility(false);
-                _profilerDefaultSpringEnabled.SetVisibility(false);
-                _profilerDefaultSpringGain.SetVisibility(false);
-                _applyProffilerSettings.SetVisibility(false);
-            }
+            var profilerEnablde = _profilerEnabled.GetValue();
+            _profilerWheelMaxRange.SetVisibility(profilerEnablde);
+            _profilerForceEnabled.SetVisibility(profilerEnablde);
+            _profilerOverallGain.SetVisibility(profilerEnablde);
+            _profilerSpringllGain.SetVisibility(profilerEnablde);
+            _profilerDamperGain.SetVisibility(profilerEnablde);
+            _profilerAllowGameSettings.SetVisibility(profilerEnablde);
+            _profilerCombinedPedals.SetVisibility(profilerEnablde);
+            _profilerDefaultSpringEnabled.SetVisibility(profilerEnablde);
+            _profilerDefaultSpringGain.SetVisibility(profilerEnablde);
 
             if (!debugIsEnabled)
             {
                 propertiesEdit = string.Empty;
                 actualState = string.Empty;
             }
-            if (_disableVanilaForceAtSpeedEnabled.GetValue())
-            {
-                _disableVanilaForceAtSpeed.SetVisibility(true);
-            }
-            else
-            {
-                _disableVanilaForceAtSpeed.SetVisibility(false);
-            }
 
-            if(logiInit)
-            {
+            if (logiInit)
                 SetOldWheelProperties();
-            }
         }
-        private void TogleAdvancedFFB()
-        {
-            if (_enableAdvancedFFB.GetValue())
-            {
-                _headerFFBA.SetVisibility(true);
-                _damperTopSpeed.SetVisibility(true);
-                _damperForceAtLowSpeed.SetVisibility(true);
-                _damperForceAtHighSpeed.SetVisibility(true);
-                _damperForceMultiplyAtMaxWheelAngle.SetVisibility(true);
-                _springForce.SetVisibility(true);
-            }
-            else
-            {
-                _headerFFBA.SetVisibility(false);
-                _damperTopSpeed.SetVisibility(false);
-                _damperForceAtLowSpeed.SetVisibility(false);
-                _damperForceAtHighSpeed.SetVisibility(false);
-                _damperForceMultiplyAtMaxWheelAngle.SetVisibility(false);
-                _springForce.SetVisibility(false);
-            }
 
-        }
         private PartInfo InitPartValue(string Name, string Path, string VaribleName, string FSMName = "Data")
         {
             var gameObj = GameObject.Find(Path);
@@ -478,32 +472,31 @@ namespace RPMLeds
         public class RegularCarInfo
         {
             public ForceFeedback FFBComp;
-            public Drivetrain DTComp;
+            public Drivetrain Drivetrain;
             public GameObject CarObject;
-            public Rigidbody CarRigidbody;
+            public Rigidbody Rigidbody;
+            public Axles Axles;
+            public float LastSteeringAngle; //Set By ffb to calculat steering velocity
+            public AxisCarController AxisCarController;
             public bool IsCorris;
             public static RegularCarInfo initCar(string carName)
             {
                 var car = GameObject.Find(carName);
-                car.AddComponent<FFBColision>();
                 var ffbComp = car.GetComponent<ForceFeedback>();
                 var drivetrainComp = car.GetComponent<Drivetrain>();
                 return new RegularCarInfo
                 {
                     FFBComp = ffbComp,
-                    DTComp = drivetrainComp,
+                    Drivetrain = drivetrainComp,
                     CarObject = car,
-                    CarRigidbody = car.GetComponent<Rigidbody>(),
+                    Rigidbody = car.GetComponent<Rigidbody>(),
+                    Axles = car.GetComponent<Axles>(),
+                    AxisCarController = car.GetComponent<AxisCarController>(),
                     IsCorris = carName == "CORRIS"
                 };
             }
         }
-        bool setSteerAngle = false;
-        float smoothForce = 0f;
-        int offsetPercentage = 0;
-        int springCenter = 0;
-        GameObject corrisGameObject;
-        Rigidbody corrisRB;
+        bool setSteerAngle = false;       
         private void Mod_OnLoad()
         {
             Patch = _modEnabled.GetValue();
@@ -527,19 +520,17 @@ namespace RPMLeds
                 _manualMaxRPM.SetVisibility(true);
             }
 
-            TogleAdvancedFFB();
             SettingChanged();
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
             ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
 
         }
-        private float lateralVelocityFiltered = 0f;
-        private float yawRateFiltered = 0f;
+
         private bool logiInit = false;
+        bool softStopEnable = false;
         private void Mod_OnMenuLoad()
         {
-            TogleAdvancedFFB();
             SettingChanged();
             if (LogitechManager.Initialize())
             {
@@ -556,7 +547,6 @@ namespace RPMLeds
                 ModConsole.Error("RPMLed - Logitech init failed");
             }
         }
-        public bool forcesIsZero = true;
         private void SetForcesToZero()
         {
             if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX)) return;
@@ -565,6 +555,41 @@ namespace RPMLeds
             LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
             LogitechGSDK.LogiStopSpringForce(_CONTROLLERINDEX);
             forcesIsZero = true;
+            softStopEnable = false;
+        }
+        private void PlayRPMLeds()
+        {
+            rpm_MAX = RPM_MAX_DEFAULT;
+            rpm_FIRST_LED = RPM_FIRST_DEFAULT;
+
+            if (CURRENTCAR.IsCorris)
+                switch (settingsRPMSource)
+                {
+                    case 0: // Auto
+                        if (revLimit != null && raceTachot != null && raceTachot.Installed.Value && revLimit.Installed.Value)
+                            rpm_MAX = Mathf.Min(raceTachot.PartValue.Value, revLimit.PartValue.Value);
+                        else if (raceTachot != null && raceTachot.Installed.Value)
+                            rpm_MAX = raceTachot.PartValue.Value;
+                        else if (revLimit != null && revLimit.Installed.Value)
+                            rpm_MAX = revLimit.PartValue.Value;
+                        break;
+                    case 1: // Tacho
+                        if (raceTachot != null && raceTachot.Installed.Value)
+                            rpm_MAX = raceTachot.PartValue.Value;
+                        break;
+                    case 2: // Rev Limiter
+                        if (revLimit != null && revLimit.Installed.Value)
+                            rpm_MAX = revLimit.PartValue.Value;
+                        break;
+                    case 3: // Manual
+                        rpm_MAX = manualRPMMax;
+                        break;
+                }
+
+            rpm_FIRST_LED = rpm_MAX * (startPercent / 100f);
+            shiftPoint = rpm_MAX * (maxPercent / 100f);
+
+            LogitechGSDK.LogiPlayLeds(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
         }
         private void Mod_FixedUpdate()
         {
@@ -594,139 +619,205 @@ namespace RPMLeds
             }
             inCar = true;
 
-            
-
-            bool isCorris = CURRENTCAR.IsCorris;
-
-            currentRPM = CURRENTCAR.DTComp.rpm;
-            currentSpeed = Mathf.Abs(CURRENTCAR.DTComp.differentialSpeed);
-            maxanglerot = maxSteeringAngle.Value;
+            currentRPM = CURRENTCAR.Drivetrain.rpm;
+            currentSpeed = Mathf.Abs(CURRENTCAR.Drivetrain.differentialSpeed);
 
             if (currentRPM > 50 && ledsEnabled)
-            {
-                rpm_MAX = RPM_MAX_DEFAULT;
-                rpm_FIRST_LED = RPM_FIRST_DEFAULT;
-
-                if (isCorris)
-                    switch (settingsRPMSource)
-                    {
-                        case 0: // Auto
-                            if (revLimit != null && raceTachot != null && raceTachot.Installed.Value && revLimit.Installed.Value)
-                                rpm_MAX = Mathf.Min(raceTachot.PartValue.Value, revLimit.PartValue.Value);
-                            else if (raceTachot != null && raceTachot.Installed.Value)
-                                rpm_MAX = raceTachot.PartValue.Value;
-                            else if (revLimit != null && revLimit.Installed.Value)
-                                rpm_MAX = revLimit.PartValue.Value;
-                            break;
-                        case 1: // Tacho
-                            if (raceTachot != null && raceTachot.Installed.Value)
-                                rpm_MAX = raceTachot.PartValue.Value;
-                            break;
-                        case 2: // Rev Limiter
-                            if (revLimit != null && revLimit.Installed.Value)
-                                rpm_MAX = revLimit.PartValue.Value;
-                            break;
-                        case 3: // Manual
-                            rpm_MAX = manualRPMMax;
-                            break;
-                    }
-
-
-                rpm_FIRST_LED = rpm_MAX * (startPercent / 100f);
-                shiftPoint = rpm_MAX * (maxPercent / 100f);
-
-                LogitechGSDK.LogiPlayLeds(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
+            {       
+                PlayRPMLeds();
             }
-
-            targetForce = currentForce / 100f;
 
             if (advancedFFBOn)
             {
-                var state = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-                float currentAngle = (state.lX / 32768f) * maxanglerot;
-                float angleFactor = Mathf.Clamp01(Mathf.Abs(currentAngle) / maxanglerot);
-
-                float speed01 = Mathf.Clamp01(currentSpeed / damperTopSpeed); 
-
-                float targetDamper = Mathf.Lerp(damperLow, damperHigh, speed01);
-                targetDamper *= Mathf.Lerp(1f, damperMultyplyMaxAngle, angleFactor); 
-                damper = Mathf.Lerp(damper, targetDamper, Time.fixedDeltaTime * 3f);
-
-                if (currentSpeed > 0.05f)
+                if (!softStopEnable)
                 {
-
-                    if(countersteeringEnabled)
-                    {
-                        Vector3 localVel = CURRENTCAR.CarObject.transform.InverseTransformDirection(CURRENTCAR.CarRigidbody.velocity);
-
-                        float forwardVelocity = localVel.z;   // +forward / -reverse (m/s)
-                        float lateralVelocity = localVel.x;   // +right / -left (m/s)
-                        float verticalVelocity = localVel.y;  // bumps / jumps
-
-                        Vector3 localAngVel = CURRENTCAR.CarObject.transform.InverseTransformDirection(CURRENTCAR.CarRigidbody.angularVelocity);
-
-                        float yawRate = localAngVel.y;
-
-                        Vector3 forwardDir = CURRENTCAR.CarObject.transform.forward;
-                        Vector3 velocityDir = CURRENTCAR.CarRigidbody.velocity.normalized;
-                        float speed = CURRENTCAR.CarRigidbody.velocity.magnitude;        // m/s
-                        float speedKmh = speed * 3.6f;
-
-                        float slipAngle = Mathf.Atan2(lateralVelocity, Mathf.Abs(forwardVelocity));
-
-
-                        float rearAxleDistance = 1.410f; // meters (tune per car)
-                        float rearSlipVelocity =
-                            lateralVelocity + yawRate * rearAxleDistance;
-
-
-                        bool rearSliding = Mathf.Abs(rearSlipVelocity) > 0.02f && Mathf.Abs(yawRate) > 0.05f && speed > 0.5f;
-
-                        float counterSteerDir = -Mathf.Sign(rearSlipVelocity);
-
-                        lateralVelocityFiltered += (lateralVelocity - lateralVelocityFiltered) * 0.1f;
-                        yawRateFiltered += (yawRate - yawRateFiltered) * 0.1f;
-
-                        float rearSlip = lateralVelocityFiltered + yawRateFiltered * rearAxleDistance;
-
-                        float slipStrength = Mathf.Clamp(Mathf.Abs(rearSlip) * 0.8f, 0f, 1f);
-
-                        slipStrength = Mathf.Pow(slipStrength, 0.7f);
-
-                        if (rearSliding)
-                        {
-                            offsetPercentage = Mathf.RoundToInt(
-                                counterSteerDir * slipStrength * countersteeringmtlpy
-                            );
-                        }
-                        else
-                            offsetPercentage = 0;
-
-                        offsetPercentage = Mathf.Clamp(offsetPercentage, -95, 95);
-                    }
-                    LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
                     LogitechGSDK.LogiPlaySoftstopForce(_CONTROLLERINDEX, 90);
-                    LogitechGSDK.LogiPlaySpringForce(_CONTROLLERINDEX, offsetPercentage, springForce, springCenter);
+                    LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, 18); // 5–15 good range
+                    softStopEnable = true;
                 }
-                else
-                {
+                var state = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
+                var force = CalculateForces();
+                LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, force);
+            }
+        }
 
-                    LogitechGSDK.LogiStopSpringForce(_CONTROLLERINDEX);
-                    LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, (int)damper);
-                }
+        [SerializeField] private float steeringSpring = 4.0f;        // small centering (1–4)
+        [SerializeField] private float steeringFriction = 1.1f;      // rack friction (0.4–1.5)
+        [SerializeField] private float frictionDeadVel = 0.01f;      // deg/s deadzone (if using wheel deg), tweak as needed
+
+        // Software damper (analog) using wheel angular velocity
+        [SerializeField] private float damperStop = 0.80f;           // torque per deg/s when stopped (heavier)
+        [SerializeField] private float damperRoll = 0.35f;           // torque per deg/s at low speed (lighter)
+        [SerializeField] private float damperFast = 0.85f;           // torque per deg/s at high speed (heavier again)
+        [SerializeField] private float damperLowSpeed = 6f;          // m/s where it reaches "roll"
+        [SerializeField] private float damperHighSpeed = 25f;        // m/s where it reaches "fast"
+
+        // Aligning torque shaping
+        [SerializeField] private float mzNormalize = 1000f;
+        [SerializeField] private float mzSoftPower = 1.7f;
+
+        // Output shaping
+        [SerializeField] private float torqueScale = 0.07f; //SCALE ALL
+        [SerializeField] private float maxForce = 100f;
+        [SerializeField] private float torqueSmoothing = 0.08f;
+        [SerializeField] private float softLimitK = 0.04f;
+        [SerializeField] private float rateUpPerSec = 450f;
+        [SerializeField] private float rateDownPerSec = 1200f;
+        [SerializeField] private bool forceInvert = true;
+
+        // Air handling (prevents spikes / "stuck at 100")
+        [SerializeField] private float minNormalForceForFFB = 1000f;
+        [SerializeField] private float airHardReleasePerSec = 8000f;
+        [SerializeField] private float airFilterReset = 0.35f;
+        [SerializeField] private float landInTime = 0.35f;
+
+        [SerializeField] private float springMoveBoost = 2.5f;     // extra spring when moving
+        [SerializeField] private float springBoostSpeed = 6f;      // m/s where boost reaches max
+        [SerializeField] private float springLockBoost = 2.0f;     // extra boost near full lock
+        [SerializeField] private float springLockStart = 0.6f;
+
+        private float filteredTorque = 0f;
+        private float lastSentForce = 0f;
+        private float contactBlend = 1f;
+
+        // Wheel angle tracking (software damper uses this)
+        private bool wheelAngleInited = false;
+        private float lastWheelDeg = 0f;
+
+        private static float SoftLimit(float x, float k) => x / (1f + k * Mathf.Abs(x));
+        private static float PowSigned(float x, float p)
+        {
+            float a = Mathf.Abs(x);
+            return Mathf.Sign(x) * Mathf.Pow(a, p);
+        }
+        private int CalculateForces()
+        {
+            float dt = Time.fixedDeltaTime;
+
+            // ===== 1) Read physical wheel angle (preferred) =====
+            // IMPORTANT: mapping depends on your wrapper.
+            // Common Unity wrappers: st.lX is -32768..32767 for wheel axis.
+            var st = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
+            float wheelDeg = st.lX * (900f / 32767f); // if your wheel is 900°. Adjust if you use 1080/540 etc.
+
+            if (!wheelAngleInited)
+            {
+                wheelAngleInited = true;
+                lastWheelDeg = wheelDeg;
             }
 
-            if(vanillaForceDisable || (vanillaForceDisableAtSpeed && currentSpeed > speedVanilaForceDisable))
+            float wheelVelDegPerSec = (wheelDeg - lastWheelDeg) / dt;
+            lastWheelDeg = wheelDeg;
+
+
+
+            // ===== 2) Car speed =====
+            float speed = CURRENTCAR.Rigidbody.velocity.magnitude;
+
+            // ===== 3) Front wheel contact detection =====
+            var fl = CURRENTCAR.Axles.frontAxle.leftWheel;
+            var fr = CURRENTCAR.Axles.frontAxle.rightWheel;
+
+            bool flLoaded = fl.onGroundDown && fl.normalForce > minNormalForceForFFB;
+            bool frLoaded = fr.onGroundDown && fr.normalForce > minNormalForceForFFB;
+            bool frontLoaded = flLoaded && frLoaded;
+
+            // Contact blend for smooth landing
+            float targetBlend = frontLoaded ? 1f : 0f;
+            float inStep = (landInTime <= 0.0001f) ? 1f : (dt / landInTime);
+            contactBlend = Mathf.MoveTowards(contactBlend, targetBlend, (targetBlend > contactBlend) ? inStep : 1f);
+
+            // ===== 4) Spring (use wheel angle, not input) =====
+            // Convert wheelDeg -> normalized -1..1 for spring (based on half-range)
+            float wheelHalfRangeDeg = 450f; // for 900° wheel. If your wheel range differs, change this.
+            float wheelNorm = Mathf.Clamp(wheelDeg / wheelHalfRangeDeg, -1f, 1f);
+
+            float baseSpring = steeringSpring;
+
+            // speed boost: 0..1
+            float speed01 = Mathf.Clamp01(speed / springBoostSpeed);
+
+            // lock boost: 0..1 once past springLockStart
+            float lock01 = Mathf.InverseLerp(springLockStart, 1f, Mathf.Abs(wheelNorm));
+
+            // effective spring multiplier
+            float springMult = 1f + speed01 * springMoveBoost + lock01 * springLockBoost;
+
+            // apply only when front loaded (same as you already do)
+            float springTorque = frontLoaded ? (-wheelNorm * baseSpring * springMult) : 0f;
+            // ===== 5) Software damper (analog), speed-shaped =====
+            float low01 = Mathf.Clamp01(speed / damperLowSpeed);
+            float high01 = Mathf.Clamp01(speed / damperHighSpeed);
+
+            float damperGain = Mathf.Lerp(damperStop, damperRoll, low01);
+            damperGain = Mathf.Lerp(damperGain, damperFast, high01);
+
+            float damperTorque = -wheelVelDegPerSec * damperGain;
+
+            // ===== 6) Friction (Coulomb) =====
+            float frictionTorque = 0f;
+            if (Mathf.Abs(wheelVelDegPerSec) > frictionDeadVel)
+                frictionTorque = -Mathf.Sign(wheelVelDegPerSec) * steeringFriction;
+
+            // ===== 7) Tire aligning torque (Mz) softened near center =====
+            float tireTorque = 0f;
+            if (frontLoaded)
             {
-                LogitechGSDK.LogiStopConstantForce(_CONTROLLERINDEX);
-                vaniliaForceApplied = false;
+                float rawMz = fl.Mz + fr.Mz;
+
+                float normMz = Mathf.Clamp(rawMz / mzNormalize, -1f, 1f);
+                float softenedMz = PowSigned(normMz, mzSoftPower) * mzNormalize;
+
+                tireTorque = softenedMz * contactBlend;
+            }
+
+            // ===== 8) Combine torque =====
+            float totalTorque = springTorque + damperTorque + frictionTorque + tireTorque;
+
+            // ===== 9) Filter torque =====
+            filteredTorque = Mathf.Lerp(filteredTorque, totalTorque, torqueSmoothing);
+
+            // ===== 10) Map to Logitech force units =====
+            float targetForce = filteredTorque * torqueScale;
+            ShowInDebugWindow("Target Force", targetForce);
+            targetForce = SoftLimit(targetForce, softLimitK);
+            targetForce = Mathf.Clamp(targetForce, -maxForce, maxForce);
+
+            // ===== 11) Airborne hard release =====
+            if (!frontLoaded)
+            {
+                targetForce = 0f;
+                filteredTorque = Mathf.Lerp(filteredTorque, 0f, airFilterReset);
+                lastSentForce = Mathf.MoveTowards(lastSentForce, 0f, airHardReleasePerSec * dt);
+            }
+
+            // ===== 12) Rate limit (release faster than apply) =====
+            float maxUpStep = rateUpPerSec * dt;
+            float maxDownStep = rateDownPerSec * dt;
+
+            float step = (Mathf.Abs(targetForce) < Mathf.Abs(lastSentForce)) ? maxDownStep : maxUpStep;
+            float limitedForce = Mathf.MoveTowards(lastSentForce, targetForce, step);
+            lastSentForce = limitedForce;
+
+            int force = Mathf.RoundToInt(Mathf.Clamp(limitedForce, -maxForce, maxForce));
+            if (forceInvert) force = -force;
+
+            ShowInDebugWindow("FFB_force", force);
+            ShowInDebugWindow("wheelDeg", (int)wheelDeg);
+            ShowInDebugWindow("wheelVel", (int)wheelVelDegPerSec);
+            ShowInDebugWindow("frontLoaded", frontLoaded ? 1 : 0);
+
+            return force;
+        }
+        private void ShowInDebugWindow(string Name,float value)
+        {
+            if (_DEBUGVALS.ContainsKey(Name))
+            {
+                _DEBUGVALS[Name] = value;
             }
             else
             {
-                const float SMOOTHING = 0.1f;
-                smoothForce += (targetForce - smoothForce) * SMOOTHING;
-                LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, (int)smoothForce);
-                vaniliaForceApplied = true;
+                _DEBUGVALS.Add(Name, value);
             }
         }
         private void Update()
@@ -788,23 +879,22 @@ namespace RPMLeds
                 text = actualState;
 
                 activeForces += $"Controller Index = {_CONTROLLERINDEX}\n";
-                activeForces += $"Has Logi Prop: {logiPropertiesOK}\n";
                 activeForces += $"Vanilia force = {currentForce.ToString("0.00")}\n";
-                activeForces += $"Logi force = {targetForce.ToString("0.00")}\n";
-                activeForces += $"Colision force = {collisionForceSetted.ToString("0.00")}\n"; 
-                activeForces += $"Smooth Logi force = {smoothForce.ToString("0.00")}\n";
+
                 activeForces += $"Car: {currentVeh.Value}\n";
                 activeForces += $"Car speed: {currentSpeed.ToString("0.00")}\n";
                 activeForces += $"RPM = {currentRPM.ToString("0.00")}\n";
                 activeForces += $"RPM Led Start = {rpm_FIRST_LED.ToString("0.00")}\n";
                 activeForces += $"RPM Led Max = {shiftPoint.ToString("0.00")}\n";
-                activeForces += $"Spring force = {springForce}\n";
-                activeForces += $"Damper force = {damper}\n";
-                activeForces += $"Vanilia Force Aplied:{vaniliaForceApplied}\n";
-                activeForces += $"Forces is zero: {forcesIsZero}\n";
-                //activeForces += $"Slip force = {slipForce}\n";
-                activeForces += $"Wheel slip offset = {offsetPercentage}\n";
+                activeForces += $"DEBUG VARS:\n";
                 
+                foreach(var varible in _DEBUGVALS)
+                {
+                    activeForces += $"{varible.Key}:{varible.Value.ToString("0.000")}\n";
+                }
+
+
+
             }
             else if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX))
             {
