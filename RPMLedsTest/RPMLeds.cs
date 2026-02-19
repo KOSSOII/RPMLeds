@@ -18,7 +18,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.5.1"; // Version
+        public override string Version => "1.6"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech G923/G29"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -44,9 +44,6 @@ namespace RPMLeds
         SettingsSliderInt _manualMaxRPM;
         SettingsSlider _startPointPercent;
         SettingsSlider _maxPointPercent;
-        SettingsCheckBox _colisionsEnabled;
-        SettingsSliderInt _colisionForce;
-        SettingsSlider _colisionForceMltpy;
         SettingsSliderInt _controllerIndex;
         SettingsCheckBox _modEnabled;
         SettingsCheckBox _rpmLedsEnabled;
@@ -75,7 +72,6 @@ namespace RPMLeds
         SettingsSlider _ffbSteeringSpring;
         SettingsSlider _ffbSteeringFriction;
         SettingsSlider _ffbFrictionDeadVel;
-
         SettingsSlider _ffbDamperStop;
         SettingsSlider _ffbDamperRoll;
         SettingsSlider _ffbDamperFast;
@@ -88,12 +84,17 @@ namespace RPMLeds
         SettingsSlider _ffbTorqueSmoothing;
         SettingsSlider _ffbSoftLimitK;
         SettingsSlider _ffbRateUpPerSec;
+        SettingsSliderInt _ConstantDamper;
+        SettingsSliderInt _ConstantSoftStop;
         SettingsSlider _ffbRateDownPerSec;
 
         SettingsSlider _ffbMinNormalForceForFFB;
         SettingsSlider _ffbAirHardReleasePerSec;
         SettingsSlider _ffbAirFilterReset;
         SettingsSlider _ffbLandInTime;
+
+        SettingsSlider _ffbMzGain;
+        SettingsSlider _ffbTrailMeters;
 
         SettingsCheckBox _ffbInvertForce;
         #endregion
@@ -103,6 +104,7 @@ namespace RPMLeds
         PartInfo revLimit;
         PartInfo raceTachot;
         FsmString currentVeh;
+        int _CONSTANTSOFTSTOP = 100;
         public static Dictionary<string, RegularCarInfo> CARS = new Dictionary<string, RegularCarInfo>();
         int profilerOperatinRange = 0;
         const float RPM_MAX_DEFAULT = 7000f;
@@ -121,7 +123,7 @@ namespace RPMLeds
         public bool forcesIsZero = true;
         Dictionary<string,float> _DEBUGVALS = new Dictionary<string,float>();
         LogitechGSDK.LogiControllerPropertiesData logiControllerPropertiesData = new LogitechGSDK.LogiControllerPropertiesData();
-
+        int _CONSTANTDAMPER = 0;
         float rpm_MAX = RPM_MAX_DEFAULT;
         float rpm_FIRST_LED = RPM_FIRST_DEFAULT;
         float startPercent = 0;
@@ -233,7 +235,17 @@ namespace RPMLeds
         }
         private void FFBSettingsChanged()
         {
-            bool advOn = _enableAdvancedFFB.GetValue(); // <-- keep only this
+            bool advOn = _enableAdvancedFFB.GetValue();
+
+            _ffbMzGain.SetVisibility(advOn);
+            _ffbTrailMeters.SetVisibility(advOn);
+            _ConstantSoftStop.SetVisibility(advOn);
+            _CONSTANTSOFTSTOP = _ConstantSoftStop.GetValue();
+            _ConstantDamper.SetVisibility(advOn);
+            _CONSTANTDAMPER = _ConstantDamper.GetValue();
+            softStopEnable = false;
+            mzGain = _ffbMzGain.GetValue();
+            trailMeters = _ffbTrailMeters.GetValue();
 
             _ffbSpringMoveBoost.SetVisibility(advOn);
             _ffbSpringBoostSpeed.SetVisibility(advOn);
@@ -303,48 +315,142 @@ namespace RPMLeds
         private void OnGui()
         {
             if (!debugIsEnabled) return;
-            propertiesEdit = GUI.TextArea(new Rect(200f, 10f, 200f, 350f), propertiesEdit, 400);
-            actualState = GUI.TextArea(new Rect(410f, 10f, 300f, 350f), actualState, 1000);
-            activeForces = GUI.TextArea(new Rect(10f, 10f, 180f, 350f), activeForces, 400);
+            float width = 350f;
+            float height = 400f;
+            float margin = 20f;
+
+            for (int i = 0; i < 3; i++)
+            {
+                Rect rect = new Rect(
+                    margin + i * (width + margin),
+                    margin,
+                    width,
+                    height
+                );
+
+                if (i == 0)
+                    activeForces = GUI.TextArea(rect, activeForces, 1000);
+                else if (i == 1)
+                    propertiesEdit = GUI.TextArea(rect, propertiesEdit, 1000);
+                else
+                    actualState = GUI.TextArea(rect, actualState, 1000);
+            }
         }
         private void FFBAdvancedSettings()
         {
+
             Settings.AddHeader("Advanced FFB Settings");
+            _ConstantSoftStop = Settings.AddSlider("_ConstantSoftStop", "Wheel Soft Stop at range %", 0, 100, 98, SettingChanged, visibleByDefault: false);
+            _ConstantDamper = Settings.AddSlider("_ConstantDamper", "Constant Damper (St. Wheel rotate resistance)", 0, 100, 15, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+          
+            Settings.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh.");
+            _ffbTorqueScale = Settings.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 2f, 0.07f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+           
+            Settings.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh.");
+            _ffbMaxForce = Settings.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 98f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            
+            Settings.AddText("Flips final sent force if wheel direction is reversed.");
+            _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", true, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbTorqueScale = Settings.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 5f, 0.07f, SettingChanged, visibleByDefault: false);
-            _ffbMaxForce = Settings.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 50f, SettingChanged, visibleByDefault: false);
-            _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", false, SettingChanged, visibleByDefault: false);
+            Settings.AddText("Base centering strength back to 0 (like caster centering).\nYou feel: wheel wants to return to center.\nToo low: wheel doesn’t self-center enough.\nToo high: feels fake/arcade, snaps to center.");
+            _ffbSteeringSpring = Settings.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 12f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbSteeringSpring = Settings.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 4f, SettingChanged, visibleByDefault: false);
-            _ffbSteeringFriction = Settings.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 1.1f, SettingChanged, visibleByDefault: false);
-            _ffbFrictionDeadVel = Settings.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.01f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("Speed where move-boost reaches maximum.\nLower value: boost kicks in early (even at low speed).\nHigher value: boost only later.");
+            _ffbSpringBoostSpeed = Settings.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",12f, 50f, 12f,SettingChanged,visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbSpringMoveBoost = Settings.AddSlider("_ffbSpringMoveBoost","Spring Boost While Moving",0f, 100f, 2.5f,SettingChanged,visibleByDefault: false);
+            Settings.AddText("Adds extra centering when moving.\nYou feel: as you start rolling, wheel returns faster.\nToo low: slow return at speed.\nToo high: can feel like autopilot / too strong centering.");
+            _ffbSpringMoveBoost = Settings.AddSlider("_ffbSpringMoveBoost", "Spring Boost While Moving", 0f, 100f, 6.5f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbSpringBoostSpeed = Settings.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",0.1f, 30f, 6f,SettingChanged,visibleByDefault: false);
+            Settings.AddText("Extra centering when wheel is near full lock.\nYou feel: “kick” back from full left/right when car begins to move.\nToo high: harsh snap from full lock.");
+            _ffbSpringLockBoost = Settings.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 1.1f, SettingChanged,visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbSpringLockBoost = Settings.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 2.0f, SettingChanged,visibleByDefault: false);
+            Settings.AddText("Where lock boost starts, based on wheel angle magnitude.\n0.6 means: boost starts after ~60% steering angle.\nLower: boost activates earlier (stronger overall).\nHigher: boost only at near-max lock.");
+            _ffbSpringLockStart = Settings.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0f, 1f, 0.7f,SettingChanged, visibleByDefault: false);
 
-            _ffbSpringLockStart = Settings.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0.2f, 0.95f, 0.6f,SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            Settings.AddText("Constant opposing torque when wheel is moving (Coulomb friction).\nYou feel: mechanical rack “scrub”, less jitter, less snap.\nToo low: oscillations + twitchy feel.\nToo high: sticky/notchy steering.");
+            _ffbSteeringFriction = Settings.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 0.4f, SettingChanged, visibleByDefault: false);
 
-            _ffbDamperStop = Settings.AddSlider("_ffbDamperStop", "Damper Stop", 0f, 2f, 0.8f, SettingChanged, visibleByDefault: false);
-            _ffbDamperRoll = Settings.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
-            _ffbDamperFast = Settings.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 2f, 0.85f, SettingChanged, visibleByDefault: false);
-            _ffbDamperLowSpeed = Settings.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed", 0f, 50f, 6f, SettingChanged, visibleByDefault: false);
-            _ffbDamperHighSpeed = Settings.AddSlider("_ffbDamperHighSpeed", "Damper High Speed", 0f, 50f, 25f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            Settings.AddText("Deadzone so friction doesn’t activate for tiny micro-movements.\nLower: friction always active (more stable but sticky).\nHigher: smoother feel but can allow small wobble.");
+            _ffbFrictionDeadVel = Settings.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.1f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            
+            Settings.AddText("Damper strength when speed ~ 0.\nYou feel: heavy wheel while parked.\nToo high: wheel feels glued/sticky at standstill.");
+            _ffbDamperStop = Settings.AddSlider("_ffbDamperStop", "Damper Stationary", 0f, 2f, 0.15f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            
+            Settings.AddText("Damper strength at low rolling speed.\nYou feel: easier to turn once moving slowly.Damper\nToo low: wobble / nervous steering when rolling.");
+            _ffbDamperRoll = Settings.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            
+            Settings.AddText("Damper strength at high speed.\nYou feel: stable steering at speed, less oscillation.\nToo low: wobble at speed\nToo high: “dead wheel” / slow responses.");
+            _ffbDamperFast = Settings.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 10f, 4.85f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+            
+            Settings.AddText("Speed where damper transitions from Stop → Roll.\nLower: becomes “easy steering” earlier.\nHigher: stays heavy longer.");
+            _ffbDamperLowSpeed = Settings.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed Stationary → Roll  (m/s)", 0f, 50f, 0.85f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbMzNormalize = Settings.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 1000f, SettingChanged, visibleByDefault: false);
-            _ffbMzSoftPower = Settings.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.7f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("Speed where damper transitions toward Fast.\nLower: high-speed stability comes earlier.\nHigher: stability only at very high speed.");
+            _ffbDamperHighSpeed = Settings.AddSlider("_ffbDamperHighSpeed", "Damper High Speed (m/s)", 0f, 80f, 20f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbTorqueSmoothing = Settings.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.08f, SettingChanged, visibleByDefault: false);
-            _ffbSoftLimitK = Settings.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 10f, 0.04f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("Scaling for aligning torque before it gets clamped/softened.\nLower: torque reaches strong response sooner (more aggressive).\nHigher: feels softer/weaker unless Mz is huge.");
+            _ffbMzNormalize = Settings.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 810, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("How soft the aligning torque is near center.\nLower: more bite near center → stronger countersteer start.\nHigher: smoother, less snap, but can feel weak");
+            _ffbMzSoftPower = Settings.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.17f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("Low-pass filter on torque (removes high-frequency noise).\nHigher: smoother, less wobble, but more lag.\nLower: sharper feel, but more wobble risk.");
+            _ffbTorqueSmoothing = Settings.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.04f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("compresses peaks smoothly before clamp.\nHigher: less “slam” into clamp, more stable.\nToo high: feels weak/washed out.");
+            _ffbSoftLimitK = Settings.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 0.500f, 0f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("How fast force is allowed to increase.\nHigher: more responsive, but can snap/wobble.\nLower: prevents sudden kicks (more stable).");
             _ffbRateUpPerSec = Settings.AddSlider("_ffbRateUpPerSec", "Rate Up / sec", 0f, 2000f, 450f, SettingChanged, visibleByDefault: false);
-            _ffbRateDownPerSec = Settings.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
 
-            _ffbMinNormalForceForFFB = Settings.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 1000f, SettingChanged, visibleByDefault: false);
-            _ffbAirHardReleasePerSec = Settings.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 8000f, SettingChanged, visibleByDefault: false);
-            _ffbAirFilterReset = Settings.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
-            _ffbLandInTime = Settings.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.35f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("How fast force can decrease (release).\nHigher: prevents “stuck force” feeling, safer on bumps.\nLower: force lingers too long.");
+            _ffbRateDownPerSec = Settings.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("Threshold to consider front wheels “loaded”.\nHigher: more aggressive airborne detection (safer).\nToo high: might disable aligning torque even on light contact.");
+            _ffbMinNormalForceForFFB = Settings.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 312f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("How fast you drop force to 0 in air.\nHigher: instantly releases (prevents lock).\nLower: can linger.\n");
+            _ffbAirHardReleasePerSec = Settings.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 2564, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("How strongly filtered torque is pulled toward 0 when airborne.\nHigher: removes spikes faster.\nToo high: can feel abrupt.");
+            _ffbAirFilterReset = Settings.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.2f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("How slowly forces re-enter after landing.\nHigher: smoother landings (less kick).\nToo high: feels delayed after bump.");
+            _ffbLandInTime = Settings.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.18f, SettingChanged, visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("Multiplier for front wheel Mz (self-aligning moment).\nYou feel: stronger natural countersteer + stronger pull back to center when tires are loaded.\nToo low: weak countersteer, weak road feel.\nToo high: wobble/oscillation at speed if damping not increased.");
+            _ffbMzGain = Settings.AddSlider("_ffbMzGain","Aligning Torque Gain (Mz)",0.5f, 3.0f, 1.2f,SettingChanged,visibleByDefault: false);
+            Settings.AddText("______________________________________________________________________________________");
+
+            Settings.AddText("Extra “trail” torque from front Fy (pneumatic/caster trail approximation).\nYou feel: more “rack pull” and stronger self-steer in slip transitions.\nToo high: fast oscillation / twitchy at speed.");
+            _ffbTrailMeters = Settings.AddSlider("_ffbTrailMeters","Steering Trail (meters)",0.0f, 0.55f, 0.02f,SettingChanged,visibleByDefault: false );
+            Settings.AddText("______________________________________________________________________________________");
         }
         private void Mod_Settings()
         {
@@ -364,10 +470,6 @@ namespace RPMLeds
 
             
             FFBAdvancedSettings();
-
-            _colisionsEnabled = Settings.AddCheckBox("_colisionsEnabled", "Colision Force", true, SettingChanged);
-            _colisionForce = Settings.AddSlider("_colisionForce", "Max. Collision Force", 1, 100, 55, SettingChanged, visibleByDefault: false);
-            _colisionForceMltpy = Settings.AddSlider("_colisionForceMltpy", "Collision Force Multiply", 1f, 60f, 15f, SettingChanged, visibleByDefault: false);
 
             Settings.AddHeader("Properties for Profiler (LGS)");
             Settings.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
@@ -395,7 +497,6 @@ namespace RPMLeds
         {
             FFBSettingsChanged();
 
-
             _CONTROLLERINDEX = _controllerIndex.GetValue();
             ledsEnabled = _rpmLedsEnabled.GetValue();
             debugIsEnabled = _showDebugMSG.GetValue();
@@ -407,12 +508,6 @@ namespace RPMLeds
             maxPercent = _maxPointPercent.GetValue();
             manualRPMMax = _manualMaxRPM.GetValue();
             settingsRPMSource = _maxRPMSource.GetSelectedItemIndex();
-
-            ffbColisionsEnabled = _colisionsEnabled.GetValue();
-            _colisionForce.SetVisibility(ffbColisionsEnabled);
-            _colisionForceMltpy.SetVisibility(ffbColisionsEnabled);
-            colisionForceMax = _colisionForce.GetValue();
-            colisionForceMultiply = _colisionForceMltpy.GetValue();
 
             var profilerEnablde = _profilerEnabled.GetValue();
             _profilerWheelMaxRange.SetVisibility(profilerEnablde);
@@ -632,7 +727,7 @@ namespace RPMLeds
                 if (!softStopEnable)
                 {
                     LogitechGSDK.LogiPlaySoftstopForce(_CONTROLLERINDEX, 90);
-                    LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, 18); // 5–15 good range
+                    LogitechGSDK.LogiPlayDamperForce(_CONTROLLERINDEX, _CONSTANTDAMPER); // 5–15 good range
                     softStopEnable = true;
                 }
                 var state = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
@@ -640,7 +735,7 @@ namespace RPMLeds
                 LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, force);
             }
         }
-
+        #region FFB Settings
         [SerializeField] private float steeringSpring = 4.0f;        // small centering (1–4)
         [SerializeField] private float steeringFriction = 1.1f;      // rack friction (0.4–1.5)
         [SerializeField] private float frictionDeadVel = 0.01f;      // deg/s deadzone (if using wheel deg), tweak as needed
@@ -676,6 +771,9 @@ namespace RPMLeds
         [SerializeField] private float springLockBoost = 2.0f;     // extra boost near full lock
         [SerializeField] private float springLockStart = 0.6f;
 
+        [SerializeField] private float mzGain = 1.4f;        // 1.0–2.5 (more = stronger natural self-steer)
+        [SerializeField] private float trailMeters = 0.06f;  // 0.03–0.10 meters (more = more self-steer)
+
         private float filteredTorque = 0f;
         private float lastSentForce = 0f;
         private float contactBlend = 1f;
@@ -683,7 +781,7 @@ namespace RPMLeds
         // Wheel angle tracking (software damper uses this)
         private bool wheelAngleInited = false;
         private float lastWheelDeg = 0f;
-
+        #endregion
         private static float SoftLimit(float x, float k) => x / (1f + k * Mathf.Abs(x));
         private static float PowSigned(float x, float p)
         {
@@ -695,10 +793,8 @@ namespace RPMLeds
             float dt = Time.fixedDeltaTime;
 
             // ===== 1) Read physical wheel angle (preferred) =====
-            // IMPORTANT: mapping depends on your wrapper.
-            // Common Unity wrappers: st.lX is -32768..32767 for wheel axis.
             var st = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-            float wheelDeg = st.lX * (900f / 32767f); // if your wheel is 900°. Adjust if you use 1080/540 etc.
+            float wheelDeg = st.lX * (900f / 32767f);
 
             if (!wheelAngleInited)
             {
@@ -708,8 +804,6 @@ namespace RPMLeds
 
             float wheelVelDegPerSec = (wheelDeg - lastWheelDeg) / dt;
             lastWheelDeg = wheelDeg;
-
-
 
             // ===== 2) Car speed =====
             float speed = CURRENTCAR.Rigidbody.velocity.magnitude;
@@ -728,23 +822,17 @@ namespace RPMLeds
             contactBlend = Mathf.MoveTowards(contactBlend, targetBlend, (targetBlend > contactBlend) ? inStep : 1f);
 
             // ===== 4) Spring (use wheel angle, not input) =====
-            // Convert wheelDeg -> normalized -1..1 for spring (based on half-range)
-            float wheelHalfRangeDeg = 450f; // for 900° wheel. If your wheel range differs, change this.
+            float wheelHalfRangeDeg = 450f;
             float wheelNorm = Mathf.Clamp(wheelDeg / wheelHalfRangeDeg, -1f, 1f);
 
             float baseSpring = steeringSpring;
 
-            // speed boost: 0..1
             float speed01 = Mathf.Clamp01(speed / springBoostSpeed);
-
-            // lock boost: 0..1 once past springLockStart
             float lock01 = Mathf.InverseLerp(springLockStart, 1f, Mathf.Abs(wheelNorm));
-
-            // effective spring multiplier
             float springMult = 1f + speed01 * springMoveBoost + lock01 * springLockBoost;
 
-            // apply only when front loaded (same as you already do)
             float springTorque = frontLoaded ? (-wheelNorm * baseSpring * springMult) : 0f;
+
             // ===== 5) Software damper (analog), speed-shaped =====
             float low01 = Mathf.Clamp01(speed / damperLowSpeed);
             float high01 = Mathf.Clamp01(speed / damperHighSpeed);
@@ -759,16 +847,24 @@ namespace RPMLeds
             if (Mathf.Abs(wheelVelDegPerSec) > frictionDeadVel)
                 frictionTorque = -Mathf.Sign(wheelVelDegPerSec) * steeringFriction;
 
-            // ===== 7) Tire aligning torque (Mz) softened near center =====
+            // ===== 7) Tire aligning torque (Mz + trail from Fy) softened near center =====
             float tireTorque = 0f;
             if (frontLoaded)
             {
-                float rawMz = fl.Mz + fr.Mz;
+                // Base aligning moment from tire model
+                float rawMz = (fl.Mz + fr.Mz) * mzGain;
 
-                float normMz = Mathf.Clamp(rawMz / mzNormalize, -1f, 1f);
-                float softenedMz = PowSigned(normMz, mzSoftPower) * mzNormalize;
+                // Add "trail" moment from lateral forces (physical approximation)
+                // If direction feels wrong, flip the sign once: rawTrail = -(fl.Fy + fr.Fy) * trailMeters;
+                float rawTrail = (fl.Fy + fr.Fy) * trailMeters;
 
-                tireTorque = softenedMz * contactBlend;
+                float rawAlign = rawMz + rawTrail;
+
+                // Shape near center
+                float normAlign = Mathf.Clamp(rawAlign / mzNormalize, -1f, 1f);
+                float softenedAlign = PowSigned(normAlign, mzSoftPower) * mzNormalize;
+
+                tireTorque = softenedAlign * contactBlend;
             }
 
             // ===== 8) Combine torque =====
@@ -780,6 +876,7 @@ namespace RPMLeds
             // ===== 10) Map to Logitech force units =====
             float targetForce = filteredTorque * torqueScale;
             ShowInDebugWindow("Target Force", targetForce);
+
             targetForce = SoftLimit(targetForce, softLimitK);
             targetForce = Mathf.Clamp(targetForce, -maxForce, maxForce);
 
@@ -801,14 +898,24 @@ namespace RPMLeds
 
             int force = Mathf.RoundToInt(Mathf.Clamp(limitedForce, -maxForce, maxForce));
             if (forceInvert) force = -force;
-
-            ShowInDebugWindow("FFB_force", force);
-            ShowInDebugWindow("wheelDeg", (int)wheelDeg);
-            ShowInDebugWindow("wheelVel", (int)wheelVelDegPerSec);
-            ShowInDebugWindow("frontLoaded", frontLoaded ? 1 : 0);
-
+            if(debugIsEnabled)
+            {
+                
+                ShowInDebugWindow("Speed(m/s)", speed);
+                ShowInDebugWindow("Steering Wheel Deg.", (int)wheelDeg);
+                ShowInDebugWindow("Steering Wheel Velo.", (int)wheelVelDegPerSec);
+                ShowInDebugWindow("Front Loaded?", frontLoaded ? 1 : 0);
+                ShowInDebugWindow("Tires Torque", tireTorque);
+                ShowInDebugWindow("Friction Torque", frictionTorque);
+                ShowInDebugWindow("Damper Torque", damperTorque);
+                ShowInDebugWindow("Spring Torque", springTorque);
+                ShowInDebugWindow("Total Torque", totalTorque);
+                ShowInDebugWindow("Limited Force", limitedForce);
+                ShowInDebugWindow("FFB Force", force);
+            }
             return force;
         }
+
         private void ShowInDebugWindow(string Name,float value)
         {
             if (_DEBUGVALS.ContainsKey(Name))
