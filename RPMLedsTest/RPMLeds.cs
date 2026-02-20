@@ -796,7 +796,7 @@ namespace RPMLeds
 
             // ===== 1) Read physical wheel angle (preferred) =====
             var st = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-            float wheelDeg = st.lX * (900f / 32767f);
+            float wheelDeg = st.lX * (maxSteeringAngle.Value / 32767f);
 
             if (!wheelAngleInited)
             {
