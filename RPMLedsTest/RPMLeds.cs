@@ -18,7 +18,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.6"; // Version
+        public override string Version => "1.6.3"; // Version
         public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -793,10 +793,10 @@ namespace RPMLeds
         private int CalculateForces()
         {
             float dt = Time.fixedDeltaTime;
-
+            float maxWheelAngle = maxSteeringAngle.Value;
             // ===== 1) Read physical wheel angle (preferred) =====
             var st = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-            float wheelDeg = st.lX * (maxSteeringAngle.Value / 32767f);
+            float wheelDeg = st.lX * (maxWheelAngle / 32767f);
 
             if (!wheelAngleInited)
             {
@@ -824,7 +824,7 @@ namespace RPMLeds
             contactBlend = Mathf.MoveTowards(contactBlend, targetBlend, (targetBlend > contactBlend) ? inStep : 1f);
 
             // ===== 4) Spring (use wheel angle, not input) =====
-            float wheelHalfRangeDeg = 450f;
+            float wheelHalfRangeDeg = maxWheelAngle / 2;
             float wheelNorm = Mathf.Clamp(wheelDeg / wheelHalfRangeDeg, -1f, 1f);
 
             float baseSpring = steeringSpring;
