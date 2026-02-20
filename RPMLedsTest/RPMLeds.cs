@@ -1,10 +1,8 @@
 ﻿using Harmony;
 using HutongGames.PlayMaker;
 using MSCLoader;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
@@ -336,160 +334,162 @@ namespace RPMLeds
         private void FFBAdvancedSettings()
         {
 
-            Settings.AddHeader("Advanced FFB Settings");
-            _ConstantSoftStop = Settings.AddSlider("_ConstantSoftStop", "Wheel Soft Stop at range %", 0, 100, 98, SettingChanged, visibleByDefault: false);
-            _ConstantDamper = Settings.AddSlider("_ConstantDamper", "Constant Damper (St. Wheel rotate resistance)", 0, 100, 15, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            SettingsTranslationExtensions.AddHeader("Advanced FFB Settings");
+            _ConstantSoftStop = SettingsTranslationExtensions.AddSlider("_ConstantSoftStop", "Wheel Soft Stop at range %", 0, 100, 98, SettingChanged, visibleByDefault: false);
+            _ConstantDamper = SettingsTranslationExtensions.AddSlider("_ConstantDamper", "Constant Damper (St. Wheel rotate resistance)", 0, 100, 15, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh."));
-            _ffbTorqueScale = Settings.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh."));
+            _ffbTorqueScale = SettingsTranslationExtensions.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh."));
-            _ffbMaxForce = Settings.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 98f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Master volume knob for ConstantForce output.\nYou feel: overall strength.\nToo high: constant clamping at ±100, can feel harsh."));
+            _ffbMaxForce = SettingsTranslationExtensions.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 98f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Flips final sent force if wheel direction is reversed."));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Flips final sent force if wheel direction is reversed."));
             _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", true, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Base centering strength back to 0 (like caster centering).\nYou feel: wheel wants to return to center.\nToo low: wheel doesn’t self-center enough.\nToo high: feels fake/arcade, snaps to center."));
-            _ffbSteeringSpring = Settings.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 12f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Base centering strength back to 0 (like caster centering).\nYou feel: wheel wants to return to center.\nToo low: wheel doesn’t self-center enough.\nToo high: feels fake/arcade, snaps to center."));
+            _ffbSteeringSpring = SettingsTranslationExtensions.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 12f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Speed where move-boost reaches maximum.\nLower value: boost kicks in early (even at low speed).\nHigher value: boost only later."));
-            _ffbSpringBoostSpeed = Settings.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",12f, 50f, 12f,SettingChanged,visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Speed where move-boost reaches maximum.\nLower value: boost kicks in early (even at low speed).\nHigher value: boost only later."));
+            _ffbSpringBoostSpeed = SettingsTranslationExtensions.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",12f, 50f, 12f,SettingChanged,visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Adds extra centering when moving.\nYou feel: as you start rolling, wheel returns faster.\nToo low: slow return at speed.\nToo high: can feel like autopilot / too strong centering."));
-            _ffbSpringMoveBoost = Settings.AddSlider("_ffbSpringMoveBoost", "Spring Boost While Moving", 0f, 100f, 6.5f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Adds extra centering when moving.\nYou feel: as you start rolling, wheel returns faster.\nToo low: slow return at speed.\nToo high: can feel like autopilot / too strong centering."));
+            _ffbSpringMoveBoost = SettingsTranslationExtensions.AddSlider("_ffbSpringMoveBoost", "Spring Boost While Moving", 0f, 100f, 6.5f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Extra centering when wheel is near full lock.\nYou feel: “kick” back from full left/right when car begins to move.\nToo high: harsh snap from full lock."));
-            _ffbSpringLockBoost = Settings.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 1.1f, SettingChanged,visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Extra centering when wheel is near full lock.\nYou feel: “kick” back from full left/right when car begins to move.\nToo high: harsh snap from full lock."));
+            _ffbSpringLockBoost = SettingsTranslationExtensions.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 1.1f, SettingChanged,visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Where lock boost starts, based on wheel angle magnitude.\n0.6 means: boost starts after ~60% steering angle.\nLower: boost activates earlier (stronger overall).\nHigher: boost only at near-max lock."));
-            _ffbSpringLockStart = Settings.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0f, 1f, 0.7f,SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Where lock boost starts, based on wheel angle magnitude.\n0.6 means: boost starts after ~60% steering angle.\nLower: boost activates earlier (stronger overall).\nHigher: boost only at near-max lock."));
+            _ffbSpringLockStart = SettingsTranslationExtensions.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0f, 1f, 0.7f,SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Constant opposing torque when wheel is moving (Coulomb friction).\nYou feel: mechanical rack “scrub”, less jitter, less snap.\nToo low: oscillations + twitchy feel.\nToo high: sticky/notchy steering."));
-            _ffbSteeringFriction = Settings.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 0.4f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Constant opposing torque when wheel is moving (Coulomb friction).\nYou feel: mechanical rack “scrub”, less jitter, less snap.\nToo low: oscillations + twitchy feel.\nToo high: sticky/notchy steering."));
+            _ffbSteeringFriction = SettingsTranslationExtensions.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 0.4f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Deadzone so friction doesn’t activate for tiny micro-movements.\nLower: friction always active (more stable but sticky).\nHigher: smoother feel but can allow small wobble."));
-            _ffbFrictionDeadVel = Settings.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.1f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Deadzone so friction doesn’t activate for tiny micro-movements.\nLower: friction always active (more stable but sticky).\nHigher: smoother feel but can allow small wobble."));
+            _ffbFrictionDeadVel = SettingsTranslationExtensions.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.1f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Damper strength when speed ~ 0.\nYou feel: heavy wheel while parked.\nToo high: wheel feels glued/sticky at standstill."));
-            _ffbDamperStop = Settings.AddSlider("_ffbDamperStop", "Damper Stationary", 0f, 2f, 0.15f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Damper strength when speed ~ 0.\nYou feel: heavy wheel while parked.\nToo high: wheel feels glued/sticky at standstill."));
+            _ffbDamperStop = SettingsTranslationExtensions.AddSlider("_ffbDamperStop", "Damper Stationary", 0f, 2f, 0.15f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Damper strength at low rolling speed.\nYou feel: easier to turn once moving slowly.Damper\nToo low: wobble / nervous steering when rolling."));
-            _ffbDamperRoll = Settings.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Damper strength at low rolling speed.\nYou feel: easier to turn once moving slowly.Damper\nToo low: wobble / nervous steering when rolling."));
+            _ffbDamperRoll = SettingsTranslationExtensions.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Damper strength at high speed.\nYou feel: stable steering at speed, less oscillation.\nToo low: wobble at speed\nToo high: “dead wheel” / slow responses."));
-            _ffbDamperFast = Settings.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 10f, 4.85f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Damper strength at high speed.\nYou feel: stable steering at speed, less oscillation.\nToo low: wobble at speed\nToo high: “dead wheel” / slow responses."));
+            _ffbDamperFast = SettingsTranslationExtensions.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 10f, 4.85f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Speed where damper transitions from Stop → Roll.\nLower: becomes “easy steering” earlier.\nHigher: stays heavy longer."));
-            _ffbDamperLowSpeed = Settings.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed Stationary → Roll  (m/s)", 0f, 50f, 0.85f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Speed where damper transitions from Stop → Roll.\nLower: becomes “easy steering” earlier.\nHigher: stays heavy longer."));
+            _ffbDamperLowSpeed = SettingsTranslationExtensions.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed Stationary → Roll  (m/s)", 0f, 50f, 0.85f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Speed where damper transitions toward Fast.\nLower: high-speed stability comes earlier.\nHigher: stability only at very high speed."));
-            _ffbDamperHighSpeed = Settings.AddSlider("_ffbDamperHighSpeed", "Damper High Speed (m/s)", 0f, 80f, 20f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Speed where damper transitions toward Fast.\nLower: high-speed stability comes earlier.\nHigher: stability only at very high speed."));
+            _ffbDamperHighSpeed = SettingsTranslationExtensions.AddSlider("_ffbDamperHighSpeed", "Damper High Speed (m/s)", 0f, 80f, 20f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Scaling for aligning torque before it gets clamped/softened.\nLower: torque reaches strong response sooner (more aggressive).\nHigher: feels softer/weaker unless Mz is huge."));
-            _ffbMzNormalize = Settings.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 810, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Scaling for aligning torque before it gets clamped/softened.\nLower: torque reaches strong response sooner (more aggressive).\nHigher: feels softer/weaker unless Mz is huge."));
+            _ffbMzNormalize = SettingsTranslationExtensions.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 810, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How soft the aligning torque is near center.\nLower: more bite near center → stronger countersteer start.\nHigher: smoother, less snap, but can feel weak"));
-            _ffbMzSoftPower = Settings.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.17f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How soft the aligning torque is near center.\nLower: more bite near center → stronger countersteer start.\nHigher: smoother, less snap, but can feel weak"));
+            _ffbMzSoftPower = SettingsTranslationExtensions.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.17f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Low-pass filter on torque (removes high-frequency noise).\nHigher: smoother, less wobble, but more lag.\nLower: sharper feel, but more wobble risk."));
-            _ffbTorqueSmoothing = Settings.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.04f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Low-pass filter on torque (removes high-frequency noise).\nHigher: smoother, less wobble, but more lag.\nLower: sharper feel, but more wobble risk."));
+            _ffbTorqueSmoothing = SettingsTranslationExtensions.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.04f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("compresses peaks smoothly before clamp.\nHigher: less “slam” into clamp, more stable.\nToo high: feels weak/washed out."));
-            _ffbSoftLimitK = Settings.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 0.500f, 0f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("compresses peaks smoothly before clamp.\nHigher: less “slam” into clamp, more stable.\nToo high: feels weak/washed out."));
+            _ffbSoftLimitK = SettingsTranslationExtensions.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 0.500f, 0f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How fast force is allowed to increase.\nHigher: more responsive, but can snap/wobble.\nLower: prevents sudden kicks (more stable)."));
-            _ffbRateUpPerSec = Settings.AddSlider("_ffbRateUpPerSec", "Rate Up / sec", 0f, 2000f, 450f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How fast force is allowed to increase.\nHigher: more responsive, but can snap/wobble.\nLower: prevents sudden kicks (more stable)."));
+            _ffbRateUpPerSec = SettingsTranslationExtensions.AddSlider("_ffbRateUpPerSec", "Rate Up / sec", 0f, 2000f, 450f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How fast force can decrease (release).\nHigher: prevents “stuck force” feeling, safer on bumps.\nLower: force lingers too long."));
-            _ffbRateDownPerSec = Settings.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How fast force can decrease (release).\nHigher: prevents “stuck force” feeling, safer on bumps.\nLower: force lingers too long."));
+            _ffbRateDownPerSec = SettingsTranslationExtensions.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Threshold to consider front wheels “loaded”.\nHigher: more aggressive airborne detection (safer).\nToo high: might disable aligning torque even on light contact."));
-            _ffbMinNormalForceForFFB = Settings.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 312f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Threshold to consider front wheels “loaded”.\nHigher: more aggressive airborne detection (safer).\nToo high: might disable aligning torque even on light contact."));
+            _ffbMinNormalForceForFFB = SettingsTranslationExtensions.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 312f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How fast you drop force to 0 in air.\nHigher: instantly releases (prevents lock).\nLower: can linger.\n"));
-            _ffbAirHardReleasePerSec = Settings.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 2564, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How fast you drop force to 0 in air.\nHigher: instantly releases (prevents lock).\nLower: can linger.\n"));
+            _ffbAirHardReleasePerSec = SettingsTranslationExtensions.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 2564, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How strongly filtered torque is pulled toward 0 when airborne.\nHigher: removes spikes faster.\nToo high: can feel abrupt."));
-            _ffbAirFilterReset = Settings.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.2f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How strongly filtered torque is pulled toward 0 when airborne.\nHigher: removes spikes faster.\nToo high: can feel abrupt."));
+            _ffbAirFilterReset = SettingsTranslationExtensions.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.2f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("How slowly forces re-enter after landing.\nHigher: smoother landings (less kick).\nToo high: feels delayed after bump."));
-            _ffbLandInTime = Settings.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.18f, SettingChanged, visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("How slowly forces re-enter after landing.\nHigher: smoother landings (less kick).\nToo high: feels delayed after bump."));
+            _ffbLandInTime = SettingsTranslationExtensions.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.18f, SettingChanged, visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Multiplier for front wheel Mz (self-aligning moment).\nYou feel: stronger natural countersteer + stronger pull back to center when tires are loaded.\nToo low: weak countersteer, weak road feel.\nToo high: wobble/oscillation at speed if damping not increased."));
-            _ffbMzGain = Settings.AddSlider("_ffbMzGain","Aligning Torque Gain (Mz)",0.5f, 3.0f, 1.2f,SettingChanged,visibleByDefault: false);
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Multiplier for front wheel Mz (self-aligning moment).\nYou feel: stronger natural countersteer + stronger pull back to center when tires are loaded.\nToo low: weak countersteer, weak road feel.\nToo high: wobble/oscillation at speed if damping not increased."));
+            _ffbMzGain = SettingsTranslationExtensions.AddSlider("_ffbMzGain","Aligning Torque Gain (Mz)",0.5f, 3.0f, 1.2f,SettingChanged,visibleByDefault: false);
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
 
-            FFBLables.Add(Settings.AddText("Extra “trail” torque from front Fy (pneumatic/caster trail approximation).\nYou feel: more “rack pull” and stronger self-steer in slip transitions.\nToo high: fast oscillation / twitchy at speed."));
-            _ffbTrailMeters = Settings.AddSlider("_ffbTrailMeters","Steering Trail (meters)",0.0f, 0.55f, 0.02f,SettingChanged,visibleByDefault: false );
-            FFBLables.Add(Settings.AddText("______________________________________________________________________________________"));
+            FFBLables.Add(SettingsTranslationExtensions.AddText("Extra “trail” torque from front Fy (pneumatic/caster trail approximation).\nYou feel: more “rack pull” and stronger self-steer in slip transitions.\nToo high: fast oscillation / twitchy at speed."));
+            _ffbTrailMeters = SettingsTranslationExtensions.AddSlider("_ffbTrailMeters","Steering Trail (meters)",0.0f, 0.55f, 0.02f,SettingChanged,visibleByDefault: false );
+            FFBLables.Add(SettingsTranslationExtensions.AddText("______________________________________________________________________________________"));
         }
         private void Mod_Settings()
         {
+            SettingsTranslationExtensions.LoadTranslateDictionary(ModLoader.GetModSettingsFolder(this));
+
             Keybind.AddHeader("Keybind");
             keybind = Keybind.Add("KB1", "Set all forces to 0", KeyCode.F6);
 
-            Settings.AddHeader("RPM Leds");
-            _rpmLedsEnabled = Settings.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, SettingChanged);
+            SettingsTranslationExtensions.AddHeader("RPM Leds");
+            _rpmLedsEnabled = SettingsTranslationExtensions.AddCheckBox("_rpmLedsEnabled", "LEDs Enabled", true, SettingChanged);
 
             string[] sourceDDSettings = new string[] { "Auto", "Race Tachometer", "Rev Limiter", "Manual" };
             _maxRPMSource = Settings.AddDropDownList("Max RPM Source", "Max Corris RPM Source", sourceDDSettings, OnSelectionChanged: SettingChanged);
 
-            _startPointPercent = Settings.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F, SettingChanged);
-            _maxPointPercent = Settings.AddSlider("Max Point", "Max Point Shift", 1f, 100F, 90F, SettingChanged);
-            _manualMaxRPM = Settings.AddSlider("Manual MaxRPM", "Manual MaxRPM", 650, 10000, 7000, SettingChanged, visibleByDefault: false);
+            _startPointPercent = SettingsTranslationExtensions.AddSlider("Percent Appear", "Start Point", 1f, 100F, 70F, SettingChanged);
+            _maxPointPercent = SettingsTranslationExtensions.AddSlider("Max Point", "Max Point Shift", 1f, 100F, 90F, SettingChanged);
+            _manualMaxRPM = SettingsTranslationExtensions.AddSlider("Manual MaxRPM", "Manual MaxRPM", 650, 10000, 7000, SettingChanged, visibleByDefault: false);
 
-            Settings.AddHeader("Enable Advanced FFB");
+            SettingsTranslationExtensions.AddHeader("Enable Advanced FFB");
             _enableAdvancedFFB = Settings.AddCheckBox("_AdvancedFFB", "Enable", false, SettingChanged);
 
             
             FFBAdvancedSettings();
 
-            Settings.AddHeader("Properties for Profiler (LGS)");
-            Settings.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
+            SettingsTranslationExtensions.AddHeader("Properties for Profiler (LGS)");
+            SettingsTranslationExtensions.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
             _profilerEnabled = Settings.AddCheckBox("_profilerEnabled", "Settings Enabled", false, SettingChanged, visibleByDefault: true);
-            _profilerWheelMaxRange = Settings.AddSlider("_profilerWheelMaxRange", "Default Spring Gain", 90, 900, 900, SettingChanged, visibleByDefault: false);
-            _profilerForceEnabled = Settings.AddCheckBox("_profilerForceEnabled", "Force Feedback Enabled", true, SettingChanged, visibleByDefault: false);
-            _profilerOverallGain = Settings.AddSlider("_profilerOverallGain", "Overall Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _profilerSpringllGain = Settings.AddSlider("_profilerSpringllGain", "Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _profilerDamperGain = Settings.AddSlider("_profilerDamperGain", "Damper Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _profilerAllowGameSettings = Settings.AddCheckBox("_profilerAllowGameSettings", "Allow Game Settings", true, SettingChanged, visibleByDefault: false);
-            _profilerCombinedPedals = Settings.AddCheckBox("_profilerCombinedPedals", "Combined Pedals", true, SettingChanged, visibleByDefault: false);
-            _profilerDefaultSpringEnabled = Settings.AddCheckBox("_profilerDefaultSpringEnabled", "Default Spring Enabled", true, SettingChanged, visibleByDefault: false);
-            _profilerDefaultSpringGain = Settings.AddSlider("_profilerDefaultSpringGain", "Default Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerWheelMaxRange = SettingsTranslationExtensions.AddSlider("_profilerWheelMaxRange", "Default Spring Gain", 90, 900, 900, SettingChanged, visibleByDefault: false);
+            _profilerForceEnabled = SettingsTranslationExtensions.AddCheckBox("_profilerForceEnabled", "Force Feedback Enabled", true, SettingChanged, visibleByDefault: false);
+            _profilerOverallGain = SettingsTranslationExtensions.AddSlider("_profilerOverallGain", "Overall Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerSpringllGain = SettingsTranslationExtensions.AddSlider("_profilerSpringllGain", "Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerDamperGain = SettingsTranslationExtensions.AddSlider("_profilerDamperGain", "Damper Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerAllowGameSettings = SettingsTranslationExtensions.AddCheckBox("_profilerAllowGameSettings", "Allow Game Settings", true, SettingChanged, visibleByDefault: false);
+            _profilerCombinedPedals = SettingsTranslationExtensions.AddCheckBox("_profilerCombinedPedals", "Combined Pedals", true, SettingChanged, visibleByDefault: false);
+            _profilerDefaultSpringEnabled = SettingsTranslationExtensions.AddCheckBox("_profilerDefaultSpringEnabled", "Default Spring Enabled", true, SettingChanged, visibleByDefault: false);
+            _profilerDefaultSpringGain = SettingsTranslationExtensions.AddSlider("_profilerDefaultSpringGain", "Default Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
             _applyProffilerSettings = Settings.AddButton("Save profiler settings", applyProfiler, visibleByDefault: false);
 
             Settings.AddHeader("Debug and Controller");
-            _showDebugMSG = Settings.AddCheckBox("_showDebugMSG", "Show debug window", false, SettingChanged);
-            Settings.AddText("If the controller shown in the debug window is incorrect, try changing the controller index used for detection. After adjusting the index, restart the game and check again.");
-            _controllerIndex = Settings.AddSlider("_controllerIndex", "Controller index", 0, 10, 0, SettingChanged, visibleByDefault: true);
+            _showDebugMSG = SettingsTranslationExtensions.AddCheckBox("_showDebugMSG", "Show debug window", false, SettingChanged);
+            SettingsTranslationExtensions.AddText("If the controller shown in the debug window is incorrect, try changing the controller index used for detection. After adjusting the index, restart the game and check again.");
+            _controllerIndex = SettingsTranslationExtensions.AddSlider("_controllerIndex", "Controller index", 0, 10, 0, SettingChanged, visibleByDefault: true);
 
-            _modEnabled = Settings.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged);
+            _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged);
         }
 
         private void SettingChanged()
