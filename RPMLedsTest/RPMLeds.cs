@@ -2,6 +2,7 @@
 using HutongGames.PlayMaker;
 using MSCLoader;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -74,7 +75,7 @@ namespace RPMLeds
         SettingsKeybind keybind;
         SettingsSlider _ffbTorqueScale;
         SettingsCheckBox _ffbToglePerCar;
-
+        SettingsCheckBox _ffbEnableLUT;
         SettingsSlider _ffbbumpGain;
         SettingsSliderInt _ffbbumpDead;
         SettingsSlider _ffbbumpClamp;
@@ -115,9 +116,14 @@ namespace RPMLeds
         SettingsSlider _ffbTrailMeters;
 
         SettingsCheckBox _ffbInvertForce;
+
+        SettingsButton _LUTShow;
+        SettingsButton _LUTReload;
         #endregion
 
         #region Vars
+        private FfbLut _lut = new FfbLut();
+        bool LUTEnabled = false;
         bool _IsToggleByCar = false;
         FsmFloat maxSteeringAngle;
         PartInfo revLimit;
@@ -158,7 +164,25 @@ namespace RPMLeds
 
         RegularCarInfo CURRENTCAR;
         #endregion
+        private FfbLutDebugGraph _lutUi;
 
+        private void ToggleLutUI()
+        {
+            if (_lutUi == null)
+            {
+                var go = new GameObject("RPMLeds_FFB_LUT_UI");
+                _lutUi = go.AddComponent<FfbLutDebugGraph>();
+                _lutUi.lutFolderAbsolute = ModLoader.GetModSettingsFolder(this);
+                _lutUi.lutFileName = "ffb_lut.lut";
+                _lutUi.showGraph = true;
+                _lutUi.Reload();
+            }
+            else
+            {
+                UnityEngine.Object.Destroy(_lutUi.gameObject);
+                _lutUi = null;
+            }
+        }
         internal static class LogitechManager
         {
             private static bool initialized = false;
@@ -474,6 +498,11 @@ namespace RPMLeds
           
             _ffbdriftTrailMul = SettingsTranslationExtensions.AddSlider("_ffbdriftTrailMul", "Drift Trail Mul", 0.0f, 5, 1.15f, SettingChanged, visibleByDefault: false);
 
+            _ffbEnableLUT = SettingsTranslationExtensions.AddCheckBox("_ffbEnableLUT", "Enable LUT", false, SettingChanged, visibleByDefault: false);
+            _LUTShow = Settings.AddButton("Show LUT Curve", ShowLUTGui, false);
+            _LUTReload = Settings.AddButton("Reload LUT Curve", ReloadLUT, false);
+
+
         }
         private void Mod_Settings()
         {
@@ -530,16 +559,34 @@ namespace RPMLeds
 
             _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged,visibleByDefault:false);
         }
-
+        private void ShowLUTGui()
+        {
+            ToggleLutUI();
+        }
+        private void ReloadLUT()
+        {
+            LoadLut();
+        }
         private void SettingChanged()
         {
             CarToggleChanged();
             FFBSettingsChanged();
+
+
+
+
             _modEnabled.SetVisibility(_showDebugMSG.GetValue());
             _CONTROLLERINDEX = _controllerIndex.GetValue();
             ledsEnabled = _rpmLedsEnabled.GetValue();
             debugIsEnabled = _showDebugMSG.GetValue();
             advancedFFBOn = _enableAdvancedFFB.GetValue();
+
+            _ffbEnableLUT.SetVisibility(advancedFFBOn);
+
+            LUTEnabled = _ffbEnableLUT.GetValue();
+
+            _LUTShow.SetVisibility(LUTEnabled);
+            _LUTReload.SetVisibility(LUTEnabled);
 
             _manualMaxRPM.SetVisibility(_maxRPMSource.GetSelectedItemName() == "Manual");
 
@@ -564,6 +611,8 @@ namespace RPMLeds
                 propertiesEdit = string.Empty;
                 actualState = string.Empty;
             }
+
+
 
             if (logiInit)
                 SetOldWheelProperties();
@@ -661,6 +710,10 @@ namespace RPMLeds
             ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
 
         }
+        private void LoadLut()
+        {
+            _lut.LoadFromFile(Path.Combine(ModLoader.GetModSettingsFolder(this), "ffb_lut.lut"));
+        }
 
         private bool logiInit = false;
         bool softStopEnable = false;
@@ -681,6 +734,7 @@ namespace RPMLeds
             {
                 ModConsole.Error("RPMLed - Logitech init failed");
             }
+            LoadLut();
         }
         private void SetForcesToZero()
         {
@@ -1035,7 +1089,10 @@ namespace RPMLeds
 
             float step = (Mathf.Abs(targetForce) < Mathf.Abs(lastSentForce)) ? maxDownStep : maxUpStep;
             float limitedForce = Mathf.MoveTowards(lastSentForce, targetForce, step);
+
             lastSentForce = limitedForce;
+
+            limitedForce = ApplyLut(limitedForce, maxForce);
 
             int force = Mathf.RoundToInt(Mathf.Clamp(limitedForce, -maxForce, maxForce));
             if (forceInvert) force = -force;
@@ -1056,6 +1113,7 @@ namespace RPMLeds
                 ShowInDebugWindow("DamperTorque", damperTorque);
                 ShowInDebugWindow("SpringTorque", springTorque);
                 ShowInDebugWindow("TotalTorque", totalTorque);
+                ShowInDebugWindow("last Sent Force Before LUT", lastSentForce);
                 ShowInDebugWindow("LimitedForce", limitedForce);
                 ShowInDebugWindow("FFB Force", force);
      
@@ -1217,6 +1275,11 @@ namespace RPMLeds
 
             // Optional: enforce driver-level operating range
             LogitechGSDK.LogiSetOperatingRange(_CONTROLLERINDEX, profilerOperatinRange);
+        }
+        private float ApplyLut(float limitedForce, float maxForce)
+        {
+            if (!LUTEnabled || !_lut.IsValid) return limitedForce;
+            return _lut.ApplyToForce(limitedForce, maxForce);
         }
     }
 }
