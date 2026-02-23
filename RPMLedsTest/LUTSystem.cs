@@ -270,7 +270,7 @@ namespace RPMLeds
                 if (line.StartsWith("#") || line.StartsWith("//")) continue;
 
                 // allow separators: space, tab, comma, semicolon
-                var parts = line.Split(new[] { ' ', '\t', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = line.Split(new[] { ' ', '\t', ',', ';','|' }, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length < 2) continue;
 
                 if (TryParseFloat(parts[0], out var x) && TryParseFloat(parts[1], out var y))

@@ -1,5 +1,6 @@
 ﻿using Harmony;
 using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using MSCLoader;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +8,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
+
 using static LogitechGSDK;
 
 
@@ -17,11 +19,39 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.7"; // Version
-        public override string Description => "Logitech SDK FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
+        public override string Version => "1.7.5"; // Version
+        public override string Description => "FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
+        public bool UseDirectInputFFB = false;
+        public bool DIFFBInit = false;
         private HarmonyInstance harmony;
+        #region Dirtect Input
+        [DllImport("user32")]
+        private static extern int GetForegroundWindow();
+
+        [DllImport("UnityForceFeedback")]
+        private static extern int InitDirectInput(int HWND);
+
+        [DllImport("UnityForceFeedback")]
+        private static extern void Aquire();
+
+        [DllImport("UnityForceFeedback")]
+        private static extern int SetDeviceForcesXY(int x, int y);
+
+        [DllImport("UnityForceFeedback")]
+        private static extern bool StartEffect();
+
+        [DllImport("UnityForceFeedback")]
+        private static extern bool StopEffect();
+
+        [DllImport("UnityForceFeedback")]
+        private static extern bool SetAutoCenter(bool autoCentre);
+
+        [DllImport("UnityForceFeedback")]
+        private static extern void FreeDirectInput();
+
+        #endregion
 
         public class PartInfo
         {
@@ -70,6 +100,11 @@ namespace RPMLeds
         Dictionary<string,bool> CARSTOGGLE = new Dictionary<string, bool>();
         List<ToggledCar> _ffbTogledCarsList = new List<ToggledCar>();
 
+        SettingsSliderInt _DIMultyply;
+        SettingsCheckBox _UseDIFFB;
+        SettingsCheckBox _SendMozaTelemtry;
+        int _DIFFBMltpy = 1000;
+        bool _SendMozaTelemetry = false;
         #region SettingsVars_FFBAdvanced
         // Advanced ConstantForce FFB settings (your new system)
         SettingsKeybind keybind;
@@ -165,7 +200,6 @@ namespace RPMLeds
         RegularCarInfo CURRENTCAR;
         #endregion
         private FfbLutDebugGraph _lutUi;
-
         private void ToggleLutUI()
         {
             if (_lutUi == null)
@@ -255,6 +289,23 @@ namespace RPMLeds
                 ___force = (int)(___forceFeedback * ___multiplier) * ___factor * ___sign;
                 return false;
             }
+        }
+        #endregion
+
+        #region DI FFB Functions
+        private void InitDIFFB()
+        {
+            if (DIFFBInit)
+            {
+                ModConsole.Log("RPMLeds - DIFFB force feedback attempted to initialise but was aleady running!");
+                return;
+            }
+
+            int foregroundWindow = GetForegroundWindow();
+            InitDirectInput(foregroundWindow);
+            Aquire();
+            DIFFBInit = true;
+            SetAutoCenter(autoCentre: false);
         }
         #endregion
 
@@ -393,6 +444,7 @@ namespace RPMLeds
         }
         private void OnGui()
         {
+            if (UseDirectInputFFB) return;
             if (!debugIsEnabled) return;
             float width = 350f;
             float height = 400f;
@@ -482,7 +534,7 @@ namespace RPMLeds
            
             _ffbbumpClamp = SettingsTranslationExtensions.AddSlider("_ffbbumpClamp", "Bump Clamp", 0.0f, 5000f, 4070, SettingChanged, visibleByDefault: false);
           
-            _ffbbumpSmoothing = SettingsTranslationExtensions.AddSlider("_ffbbumpSmoothing", "Bump Smoothing", 0.0f, 1f, 0.02f, SettingChanged, visibleByDefault: false);
+            _ffbbumpSmoothing = SettingsTranslationExtensions.AddSlider("_ffbbumpSmoothing", "Bump Smoothing", 0.0f, 1f, 0.85f, SettingChanged, visibleByDefault: false);
             
             _ffbrearSlipStartDeg = SettingsTranslationExtensions.AddSlider("_ffbrearSlipStartDeg", "Start modulation Deg", 0.0f, 10f, 3f, SettingChanged, visibleByDefault: false);
 
@@ -557,7 +609,12 @@ namespace RPMLeds
             SettingsTranslationExtensions.AddText("If the controller shown in the debug window is incorrect, try changing the controller index used for detection. After adjusting the index, restart the game and check again.");
             _controllerIndex = SettingsTranslationExtensions.AddSlider("_controllerIndex", "Controller index", 0, 10, 0, SettingChanged, visibleByDefault: true);
 
+            _UseDIFFB = SettingsTranslationExtensions.AddCheckBox("_UseDIFFB", "Use Direct Input FFB (!GAME RESTART REQUIRED!)", false, SettingChanged);
+            _DIMultyply = SettingsTranslationExtensions.AddSlider("_DIMultyply", "Direct Input FFB Force Multiply", 1, 10000, 1000, SettingChanged, visibleByDefault: false);
+            _SendMozaTelemtry = SettingsTranslationExtensions.AddCheckBox("_SendMozaTelemtry", "Send Telemetry to Pit House", false, SettingChanged, visibleByDefault: false);
+
             _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged,visibleByDefault:false);
+            
         }
         private void ShowLUTGui()
         {
@@ -572,8 +629,10 @@ namespace RPMLeds
             CarToggleChanged();
             FFBSettingsChanged();
 
-
-
+            if (_maxRPMSource.GetSelectedItemName() == "Manual")
+            {
+                _manualMaxRPM.SetVisibility(true);
+            }
 
             _modEnabled.SetVisibility(_showDebugMSG.GetValue());
             _CONTROLLERINDEX = _controllerIndex.GetValue();
@@ -612,7 +671,12 @@ namespace RPMLeds
                 actualState = string.Empty;
             }
 
+             UseDirectInputFFB = _UseDIFFB.GetValue();
+            _DIMultyply.SetVisibility(UseDirectInputFFB);
+            _SendMozaTelemtry.SetVisibility(UseDirectInputFFB);
 
+            _SendMozaTelemetry = _SendMozaTelemtry.GetValue();
+            _DIFFBMltpy = _DIMultyply.GetValue();
 
             if (logiInit)
                 SetOldWheelProperties();
@@ -698,12 +762,6 @@ namespace RPMLeds
             CARS.Add("Gifu", RegularCarInfo.initCar("GIFU(750/450psi)"));
             CARS.Add("Bachglotz", RegularCarInfo.initCar("BACHGLOTZ(1905kg)"));
 
-
-            if (_maxRPMSource.GetSelectedItemName() == "Manual")
-            {
-                _manualMaxRPM.SetVisibility(true);
-            }
-
             SettingChanged();
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
@@ -720,11 +778,21 @@ namespace RPMLeds
         private void Mod_OnMenuLoad()
         {
             SettingChanged();
+
+            if (!UseDirectInputFFB)
+                InitLogi();
+            else
+                InitDIFFB();
+
+            LoadLut();
+        }
+        private void InitLogi()
+        {
             if (LogitechManager.Initialize())
             {
                 ModConsole.Print("RPMLed - Logitech initialized successfully");
                 logiInit = true;
-                if(LoadProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData))
+                if (LoadProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData))
                 {
                     SetOldWheelProperties();
                     ApplyProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData);
@@ -734,19 +802,25 @@ namespace RPMLeds
             {
                 ModConsole.Error("RPMLed - Logitech init failed");
             }
-            LoadLut();
         }
         private void SetForcesToZero()
         {
-            if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX)) return;
-            LogitechGSDK.LogiStopSoftstopForce(_CONTROLLERINDEX);
-            LogitechGSDK.LogiStopConstantForce(_CONTROLLERINDEX);
-            LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
-            LogitechGSDK.LogiStopSpringForce(_CONTROLLERINDEX);
+            if(!UseDirectInputFFB)
+            {
+                if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX)) return;
+                LogitechGSDK.LogiStopSoftstopForce(_CONTROLLERINDEX);
+                LogitechGSDK.LogiStopConstantForce(_CONTROLLERINDEX);
+                LogitechGSDK.LogiStopDamperForce(_CONTROLLERINDEX);
+                LogitechGSDK.LogiStopSpringForce(_CONTROLLERINDEX);
+                softStopEnable = false;
+            }
+            else
+            {
+                StopEffect();
+            }
             forcesIsZero = true;
-            softStopEnable = false;
         }
-        private void PlayRPMLeds()
+        private void PlayLogiRPMLeds()
         {
             rpm_MAX = RPM_MAX_DEFAULT;
             rpm_FIRST_LED = RPM_FIRST_DEFAULT;
@@ -777,8 +851,24 @@ namespace RPMLeds
 
             rpm_FIRST_LED = rpm_MAX * (startPercent / 100f);
             shiftPoint = rpm_MAX * (maxPercent / 100f);
+            PlayLedsCall(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
 
-            LogitechGSDK.LogiPlayLeds(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
+        }
+        private void PlayLedsCall(int controllerIndex,float currentRpm,float startRpm, float endRpm)
+        {
+            if(!UseDirectInputFFB)
+                LogitechGSDK.LogiPlayLeds(controllerIndex, currentRpm, startRpm, endRpm);
+        }
+        private bool LogiOK()
+        {
+            var logiOK = LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX) && LogitechGSDK.LogiUpdate();
+
+            if (!setSteerAngle)
+            {
+                LogitechGSDK.LogiSetOperatingRange(_CONTROLLERINDEX, (int)maxSteeringAngle.Value);
+                setSteerAngle = true;
+            }
+            return logiOK;
         }
         private void Mod_FixedUpdate()
         {
@@ -788,15 +878,9 @@ namespace RPMLeds
                     SetForcesToZero();
                 return;
             }
-
-            if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX)) return;
-
-            if (!LogitechGSDK.LogiUpdate()) return;
-
-            if (!setSteerAngle)
+            if(!UseDirectInputFFB)
             {
-                LogitechGSDK.LogiSetOperatingRange(_CONTROLLERINDEX, (int)maxSteeringAngle.Value);
-                setSteerAngle = true;
+                if (!LogiOK()) return;
             }
 
             CURRENTCAR = CARS[currentVeh.Value];
@@ -811,11 +895,40 @@ namespace RPMLeds
             
 
             if (currentRPM > 50 && ledsEnabled)
-            {       
-                PlayRPMLeds();
+            {
+                if(!UseDirectInputFFB)
+                    PlayLogiRPMLeds();
             }
 
-            if (advancedFFBOn && !_IsToggleByCar || advancedFFBOn && _IsToggleByCar && CARSTOGGLE[currentVeh.Value])
+            var vanillaForce = CURRENTCAR.FFBComp.force;
+            var advanced = advancedFFBOn && !_IsToggleByCar || advancedFFBOn && _IsToggleByCar && CARSTOGGLE[currentVeh.Value];
+            if (!UseDirectInputFFB)
+            {
+                PlayLogiFFB(vanillaForce, advanced);
+            }
+            else
+            {
+                PlayDirectInputFFB(vanillaForce, advanced);
+            }
+
+        }
+        private void PlayDirectInputFFB(int vanillaForce, bool advanced)
+        {
+            if (forcesIsZero)
+                StartEffect();
+            var force = vanillaForce;
+            if (advanced)
+            {
+                float steer = Input.GetAxisRaw("Joy1 Axis 1");
+                int DISteerValue = Mathf.RoundToInt(steer * 32767f);
+                force = CalculateForces(CURRENTCAR, DISteerValue) * _DIFFBMltpy;
+            }
+            SetDeviceForcesXY(force, 0);
+        }
+        private void PlayLogiFFB(int vanillaForce,bool advanced)
+        {
+            var force = vanillaForce / 100;
+            if(advanced)
             {
                 if (!softStopEnable)
                 {
@@ -824,15 +937,33 @@ namespace RPMLeds
                     softStopEnable = true;
                 }
                 var state = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-                var force = CalculateForces();
-                LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, force);
+                force = CalculateForces(CURRENTCAR, state.lX);
             }
-            else
-            {
-                LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, Mathf.Clamp(CURRENTCAR.FFBComp.force / 100,-100,100));
-            }
+            
+            LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, force);
         }
         #region FFB Settings
+
+        // Rear slip -> parameter modulation (NOT assist torque)
+        private float rearSlipStartDeg = 3f;     // start modulation
+        private float rearSlipFullDeg = 18f;    // full modulation
+        private float rearSlipMinSpeed = 3f;     // m/s
+
+        private float driftSpringMul = 0.65f;  // spring reduced to 65% at full rear slip
+        private float driftDamperMul = 0.80f;  // damper reduced to 80% at full rear slip
+        private float driftMzMul = 1.20f;  // Mz gain boosted to 120% at full rear slip
+        private float driftTrailMul = 1.15f;  // trail boosted to 115% at full rear slip
+
+        private float rearSlipExtraFromVelo = 0.0f; // optional (0..1), keep 0 for now
+
+        private float rearBumpScale = 0.45f;   // 0..1 how much rear jolts affect steering (start 0.3–0.6)
+
+        // Jolt -> torque
+        private float bumpGain = 0.0018f;      // torque per (N/s)
+        private float bumpDead = 2500f;        // N/s deadzone
+        private float bumpClamp = 2.0f;        // clamp bump torque (torque units)
+        private float bumpSmoothing = 0.35f;   // 0.2–0.6
+
         private float steeringSpring = 4.0f;        // small centering (1–4)
         private float steeringFriction = 1.1f;      // rack friction (0.4–1.5)
         private float frictionDeadVel = 0.01f;      // deg/s deadzone (if using wheel deg), tweak as needed
@@ -886,35 +1017,15 @@ namespace RPMLeds
             return Mathf.Sign(x) * Mathf.Pow(a, p);
         }
 
-        // Rear slip -> parameter modulation (NOT assist torque)
-        private float rearSlipStartDeg = 3f;     // start modulation
-        private float rearSlipFullDeg = 18f;    // full modulation
-        private float rearSlipMinSpeed = 3f;     // m/s
-
-        private float driftSpringMul = 0.65f;  // spring reduced to 65% at full rear slip
-        private float driftDamperMul = 0.80f;  // damper reduced to 80% at full rear slip
-        private float driftMzMul = 1.20f;  // Mz gain boosted to 120% at full rear slip
-        private float driftTrailMul = 1.15f;  // trail boosted to 115% at full rear slip
-
-        private float rearSlipExtraFromVelo = 0.0f; // optional (0..1), keep 0 for now
-       
-        private float rearBumpScale = 0.45f;   // 0..1 how much rear jolts affect steering (start 0.3–0.6)
-
-        // Jolt -> torque
-        private float bumpGain = 0.0018f;      // torque per (N/s)
-        private float bumpDead = 2500f;        // N/s deadzone
-        private float bumpClamp = 2.0f;        // clamp bump torque (torque units)
-        private float bumpSmoothing = 0.35f;   // 0.2–0.6
-
         private float _flPrevFz, _frPrevFz, _rlPrevFz, _rrPrevFz;
         private float _bumpFiltered;
-        private int CalculateForces()
+        private int CalculateForces(RegularCarInfo Car, int WheelDInputPositionValue)
         {
             float dt = Time.fixedDeltaTime;
 
             // ===== 1) Read physical wheel angle (preferred) =====
-            var st = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
-            float wheelDeg = st.lX * (900f / 32767f); // adjust if you use 1080/540 etc.
+            float maxWheelAngle = maxSteeringAngle.Value;
+            float wheelDeg = WheelDInputPositionValue * (maxWheelAngle / 32767f); // adjust if you use 1080/540 etc.
 
             if (!wheelAngleInited)
             {
@@ -922,10 +1033,10 @@ namespace RPMLeds
                 lastWheelDeg = wheelDeg;
 
                 // init prev values to avoid first-frame spike
-                var fl0 = CURRENTCAR.Axles.frontAxle.leftWheel;
-                var fr0 = CURRENTCAR.Axles.frontAxle.rightWheel;
-                var rl0 = CURRENTCAR.Axles.rearAxle.leftWheel;
-                var rr0 = CURRENTCAR.Axles.rearAxle.rightWheel;
+                var fl0 = Car.Axles.frontAxle.leftWheel;
+                var fr0 = Car.Axles.frontAxle.rightWheel;
+                var rl0 = Car.Axles.rearAxle.leftWheel;
+                var rr0 = Car.Axles.rearAxle.rightWheel;
 
                 _flPrevFz = fl0.normalForce;
                 _frPrevFz = fr0.normalForce;
@@ -937,13 +1048,13 @@ namespace RPMLeds
             lastWheelDeg = wheelDeg;
 
             // ===== 2) Car speed =====
-            float speed = CURRENTCAR.Rigidbody.velocity.magnitude;
+            float speed = Car.Rigidbody.velocity.magnitude;
 
             // ===== 3) Wheel references & contact detection =====
-            var fl = CURRENTCAR.Axles.frontAxle.leftWheel;
-            var fr = CURRENTCAR.Axles.frontAxle.rightWheel;
-            var rl = CURRENTCAR.Axles.rearAxle.leftWheel;
-            var rr = CURRENTCAR.Axles.rearAxle.rightWheel;
+            var fl = Car.Axles.frontAxle.leftWheel;
+            var fr = Car.Axles.frontAxle.rightWheel;
+            var rl = Car.Axles.rearAxle.leftWheel;
+            var rr = Car.Axles.rearAxle.rightWheel;
 
             bool flLoaded = fl.onGroundDown && fl.normalForce > minNormalForceForFFB;
             bool frLoaded = fr.onGroundDown && fr.normalForce > minNormalForceForFFB;
@@ -959,7 +1070,7 @@ namespace RPMLeds
             contactBlend = Mathf.MoveTowards(contactBlend, targetBlend, (targetBlend > contactBlend) ? inStep : 1f);
 
             // ===== 5) Wheel normalization (-1..1) =====
-            float wheelHalfRangeDeg = 450f; // for 900°
+            float wheelHalfRangeDeg = maxWheelAngle / 2; // for 900°
             float wheelNorm = Mathf.Clamp(wheelDeg / wheelHalfRangeDeg, -1f, 1f);
 
             // ===== 6) Rear slip factor (0..1) -> modulates parameters (NO extra assist torque) =====
@@ -1134,6 +1245,8 @@ namespace RPMLeds
         }
         private void Update()
         {
+            if(UseDirectInputFFB) return;
+
             if (keybind.GetKeybindDown())
             {
                 SetForcesToZero();
