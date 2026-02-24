@@ -1247,7 +1247,6 @@ namespace RPMLeds
                 ShowInDebugWindow("last Sent Force Before LUT", lastSentForce);
                 ShowInDebugWindow("LimitedForce", limitedForce);
                 ShowInDebugWindow("FFB Force", force);
-
             }
 
             return force;
