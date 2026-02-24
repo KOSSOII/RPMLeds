@@ -9,7 +9,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
 
-using static LogitechGSDK;
 
 
 namespace RPMLeds
@@ -19,7 +18,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.7.5"; // Version
+        public override string Version => "1.7.6"; // Version
         public override string Description => "FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -60,7 +59,20 @@ namespace RPMLeds
             public FsmFloat PartValue;
             public FsmBool Installed;
         }
-
+        [StructLayout(LayoutKind.Sequential)]
+        public struct LogiControllerPropertiesData
+        {
+            public int forceEnable;
+            public int overallGain;
+            public int springGain;
+            public int damperGain;
+            public int defaultSpringEnabled;
+            public int defaultSpringGain;
+            public int combinePedals;
+            public int wheelRange;
+            public int gameSettingsEnabled;
+            public int allowControllerProperties;
+        }
         #region SettingsVars
 
         SettingsSlider _ffbSpringMoveBoost;
@@ -166,7 +178,7 @@ namespace RPMLeds
         FsmString currentVeh;
         int _CONSTANTSOFTSTOP = 100;
         public static Dictionary<string, RegularCarInfo> CARS = new Dictionary<string, RegularCarInfo>();
-        int profilerOperatinRange = 0;
+        int profilerOperatinRange = 900;
         const float RPM_MAX_DEFAULT = 7000f;
         const float RPM_FIRST_DEFAULT = 5000f;
         public static bool ffbColisionsEnabled = true;
@@ -181,7 +193,7 @@ namespace RPMLeds
         public static int _CONTROLLERINDEX = 0;
         public bool forcesIsZero = true;
         Dictionary<string,float> _DEBUGVALS = new Dictionary<string,float>();
-        LogitechGSDK.LogiControllerPropertiesData logiControllerPropertiesData = new LogitechGSDK.LogiControllerPropertiesData();
+        RPMLeds.LogiControllerPropertiesData logiControllerPropertiesData = new RPMLeds.LogiControllerPropertiesData();
         int _CONSTANTDAMPER = 0;
         float rpm_MAX = RPM_MAX_DEFAULT;
         float rpm_FIRST_LED = RPM_FIRST_DEFAULT;
@@ -230,9 +242,10 @@ namespace RPMLeds
                 {
                     ok = LogitechGSDK.LogiSteeringInitialize(false);
                 }
-                catch
+                catch(UnityException ex)
                 {
-                    ModConsole.Error("LogiSteeringInitialize function failed");
+                    ModConsole.Error($"Logi Steering Initialize function failed:\n{ex.Message}");
+                    return false;
                 }
                  
                 if (ok)
@@ -593,15 +606,15 @@ namespace RPMLeds
             SettingsTranslationExtensions.AddHeader("Properties for Profiler (LGS)");
             SettingsTranslationExtensions.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
             _profilerEnabled = Settings.AddCheckBox("_profilerEnabled", "Settings Enabled", false, SettingChanged, visibleByDefault: true);
-            _profilerWheelMaxRange = SettingsTranslationExtensions.AddSlider("_profilerWheelMaxRange", "Default Spring Gain", 90, 900, 900, SettingChanged, visibleByDefault: false);
+            _profilerWheelMaxRange = SettingsTranslationExtensions.AddSlider("_profilerWheelMaxRange", "Wheel Max Range", 90, 900, 900, SettingChanged, visibleByDefault: false);
             _profilerForceEnabled = SettingsTranslationExtensions.AddCheckBox("_profilerForceEnabled", "Force Feedback Enabled", true, SettingChanged, visibleByDefault: false);
-            _profilerOverallGain = SettingsTranslationExtensions.AddSlider("_profilerOverallGain", "Overall Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _profilerSpringllGain = SettingsTranslationExtensions.AddSlider("_profilerSpringllGain", "Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
-            _profilerDamperGain = SettingsTranslationExtensions.AddSlider("_profilerDamperGain", "Damper Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerOverallGain = SettingsTranslationExtensions.AddSlider("_profilerOverallGain", "Overall Gain", 0, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerSpringllGain = SettingsTranslationExtensions.AddSlider("_profilerSpringllGain", "Spring Gain", 0, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerDamperGain = SettingsTranslationExtensions.AddSlider("_profilerDamperGain", "Damper Gain", 0, 100, 80, SettingChanged, visibleByDefault: false);
             _profilerAllowGameSettings = SettingsTranslationExtensions.AddCheckBox("_profilerAllowGameSettings", "Allow Game Settings", true, SettingChanged, visibleByDefault: false);
             _profilerCombinedPedals = SettingsTranslationExtensions.AddCheckBox("_profilerCombinedPedals", "Combined Pedals", true, SettingChanged, visibleByDefault: false);
             _profilerDefaultSpringEnabled = SettingsTranslationExtensions.AddCheckBox("_profilerDefaultSpringEnabled", "Default Spring Enabled", true, SettingChanged, visibleByDefault: false);
-            _profilerDefaultSpringGain = SettingsTranslationExtensions.AddSlider("_profilerDefaultSpringGain", "Default Spring Gain", 1, 100, 80, SettingChanged, visibleByDefault: false);
+            _profilerDefaultSpringGain = SettingsTranslationExtensions.AddSlider("_profilerDefaultSpringGain", "Default Spring Gain", 0, 100, 80, SettingChanged, visibleByDefault: false);
             _applyProffilerSettings = Settings.AddButton("Save profiler settings", applyProfiler, visibleByDefault: false);
 
             Settings.AddHeader("Debug and Controller");
@@ -660,7 +673,7 @@ namespace RPMLeds
             _profilerOverallGain.SetVisibility(profilerEnablde);
             _profilerSpringllGain.SetVisibility(profilerEnablde);
             _profilerDamperGain.SetVisibility(profilerEnablde);
-            _profilerAllowGameSettings.SetVisibility(profilerEnablde);
+            _profilerAllowGameSettings.SetVisibility(false);
             _profilerCombinedPedals.SetVisibility(profilerEnablde);
             _profilerDefaultSpringEnabled.SetVisibility(profilerEnablde);
             _profilerDefaultSpringGain.SetVisibility(profilerEnablde);
@@ -766,6 +779,8 @@ namespace RPMLeds
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
             ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
+            if (!logiInit && !UseDirectInputFFB)
+                InitLogi();
 
         }
         private void LoadLut()
@@ -791,11 +806,16 @@ namespace RPMLeds
             if (LogitechManager.Initialize())
             {
                 ModConsole.Print("RPMLed - Logitech initialized successfully");
-                logiInit = true;
-                if (LoadProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData))
+                if (_profilerEnabled.GetValue())
                 {
-                    SetOldWheelProperties();
-                    ApplyProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData);
+                    logiInit = true;
+                    if (LoadProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData))
+                    {
+
+                        SetOldWheelProperties();
+                        ApplyProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData);
+
+                    }
                 }
             }
             else
@@ -865,7 +885,7 @@ namespace RPMLeds
 
             if (!setSteerAngle)
             {
-                LogitechGSDK.LogiSetOperatingRange(_CONTROLLERINDEX, (int)maxSteeringAngle.Value);
+                LogitechGSDK.LogiSetOperatingRange(_CONTROLLERINDEX, profilerOperatinRange);
                 setSteerAngle = true;
             }
             return logiOK;
@@ -1227,7 +1247,7 @@ namespace RPMLeds
                 ShowInDebugWindow("last Sent Force Before LUT", lastSentForce);
                 ShowInDebugWindow("LimitedForce", limitedForce);
                 ShowInDebugWindow("FFB Force", force);
-     
+
             }
 
             return force;
@@ -1281,7 +1301,7 @@ namespace RPMLeds
                     text = propertiesEdit;
                     propertiesEdit = text + "gameSettingsEnabled = " + logiControllerPropertiesData.gameSettingsEnabled + "\n";
                     text = propertiesEdit;
-                    propertiesEdit = text + "allowGameSettings = " + logiControllerPropertiesData.allowGameSettings + "\n";
+                    propertiesEdit = text + "allowControllerProperties = " + logiControllerPropertiesData.allowControllerProperties + "\n";
                     text = propertiesEdit;
                     propertiesEdit = text + "Profiler Operating Range = " + profilerOperatinRange + "\n";
                   
@@ -1341,7 +1361,7 @@ namespace RPMLeds
             }
         }
         bool logiPropertiesOK = false;
-        private bool LoadProfilerWheelProperties(int controllerIndex, ref LogitechGSDK.LogiControllerPropertiesData outProps)
+        private bool LoadProfilerWheelProperties(int controllerIndex, ref RPMLeds.LogiControllerPropertiesData outProps)
         {
             if (!LogitechGSDK.LogiUpdate())
                 return false;
@@ -1349,8 +1369,8 @@ namespace RPMLeds
             if (!LogitechGSDK.LogiIsConnected(controllerIndex))
                 return false;
 
-            outProps = new LogitechGSDK.LogiControllerPropertiesData();
-            return LogitechGSDK.LogiGetCurrentControllerProperties(
+            outProps = new RPMLeds.LogiControllerPropertiesData();
+            return RPMLeds.LogiGetCurrentControllerProperties(
                 controllerIndex,
                 ref outProps);
         }
@@ -1358,30 +1378,30 @@ namespace RPMLeds
         {
             profilerOperatinRange = _profilerWheelMaxRange.GetValue();
             logiControllerPropertiesData.wheelRange = profilerOperatinRange;
-            logiControllerPropertiesData.forceEnable = _profilerForceEnabled.GetValue();
+            logiControllerPropertiesData.forceEnable = _profilerForceEnabled.GetValue() ? 1 : 0;
             logiControllerPropertiesData.overallGain = _profilerOverallGain.GetValue();
             logiControllerPropertiesData.springGain = _profilerSpringllGain.GetValue();
             logiControllerPropertiesData.damperGain = _profilerDamperGain.GetValue();
-            logiControllerPropertiesData.combinePedals = _profilerCombinedPedals.GetValue();
-            logiControllerPropertiesData.defaultSpringEnabled = _profilerDefaultSpringEnabled.GetValue();
+            logiControllerPropertiesData.combinePedals = _profilerCombinedPedals.GetValue() ? 1 : 0; ;
+            logiControllerPropertiesData.defaultSpringEnabled = _profilerDefaultSpringEnabled.GetValue() ? 1 : 0; ;
             logiControllerPropertiesData.defaultSpringGain = _profilerDefaultSpringGain.GetValue();
         }
 
         [DllImport("LogitechSteeringWheel",CallingConvention = CallingConvention.Cdecl)] 
-        private static extern bool LogiSetPreferredControllerPropertiesEx(int controllerIndex,ref LogitechGSDK.LogiControllerPropertiesData properties);
-        private bool ApplyProfilerWheelProperties(int controllerIndex, ref LogitechGSDK.LogiControllerPropertiesData props)
+        private static extern bool LogiSetPreferredControllerProperties(int controllerIndex,ref RPMLeds.LogiControllerPropertiesData properties);
+        [DllImport("LogitechSteeringWheel", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern bool LogiGetCurrentControllerProperties(int index, ref LogiControllerPropertiesData properties);
+        private bool ApplyProfilerWheelProperties(int controllerIndex, ref RPMLeds.LogiControllerPropertiesData props)
         {
-            return RPMLeds.LogiSetPreferredControllerPropertiesEx(controllerIndex, ref props);
+            return RPMLeds.LogiSetPreferredControllerProperties(controllerIndex, ref props);
         }
         private void applyProfiler()
         {
-            profilerOperatinRange = _profilerWheelMaxRange.GetValue(); // e.g., 900
+            LogitechGSDK.LogiGetOperatingRange(_CONTROLLERINDEX, ref profilerOperatinRange); // e.g., 900
 
+            profilerOperatinRange = _profilerWheelMaxRange.GetValue();
             // Update wheel properties
             SetOldWheelProperties(); // sets wheelRange = profilerOperatinRange
-
-            // Disable game override to allow full range
-            logiControllerPropertiesData.allowGameSettings = false;
 
             // Apply to the wheel
             ApplyProfilerWheelProperties(_CONTROLLERINDEX, ref logiControllerPropertiesData);
@@ -1394,6 +1414,7 @@ namespace RPMLeds
             if (!LUTEnabled || !_lut.IsValid) return limitedForce;
             return _lut.ApplyToForce(limitedForce, maxForce);
         }
+
     }
 }
 
