@@ -223,7 +223,7 @@ namespace RPMLeds
         private string activeForces;
         public static int _CONTROLLERINDEX = 0;
         public bool forcesIsZero = true;
-        Dictionary<string,float> _DEBUGVALS = new Dictionary<string,float>();
+        Dictionary<string, float> _DEBUGVALS = new Dictionary<string, float>();
         RPMLeds.LogiControllerPropertiesData logiControllerPropertiesData = new RPMLeds.LogiControllerPropertiesData();
         int _CONSTANTDAMPER = 0;
         float rpm_MAX = RPM_MAX_DEFAULT;
