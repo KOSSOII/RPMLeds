@@ -18,7 +18,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.8"; // Version
+        public override string Version => "1.7.7"; // Version
         public override string Description => "FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -75,11 +75,6 @@ namespace RPMLeds
         }
         #region SettingsVars
 
-        SettingsSlider _ffbSpringMoveBoost;
-        SettingsSlider _ffbSpringBoostSpeed;
-        SettingsSlider _ffbSpringLockBoost;
-        SettingsSlider _ffbSpringLockStart;
-
         SettingsCheckBox _showDebugMSG;
         SettingsCheckBox _enableAdvancedFFB;
         SettingsDropDownList _maxRPMSource;
@@ -101,35 +96,6 @@ namespace RPMLeds
         SettingsSliderInt _profilerDefaultSpringGain;
         SettingsSlider _ffbMaxForce;
         SettingsButton _applyProffilerSettings;
-
-        // =====================
-        // Geometry
-        // =====================
-        SettingsSlider _scrubRadiusPct;      // 0–100 → 0..0.08m
-
-        // =====================
-        // SAT Drop
-        // =====================
-        SettingsSlider _satStart;            // 0.5–2.5
-        SettingsSlider _satFull;             // 0.8–3.0
-        SettingsSlider _satDropPct;          // 0–100 → 0..0.8
-
-        // =====================
-        // Bank / Camber / Caster
-        // =====================
-        SettingsSlider _bankTiltPct;         // 0–100 → 0..1
-        SettingsSlider _camberGain;          // 0.000–0.050
-        SettingsSlider _casterGain;          // 0.000–0.050
-
-        // =====================
-        // Compression Velocity Bumps
-        // =====================
-        SettingsCheckBox _bumpUseCompVel;
-
-        SettingsSlider _compVelGain;         // 0–3
-        SettingsSlider _compVelClamp;        // 0–3
-        SettingsSlider _compVelDead;         // 0–1
-        SettingsSlider _rearCompPct;
 
         #endregion SettingsVars
 
@@ -159,12 +125,10 @@ namespace RPMLeds
         SettingsSlider _ffbrearSlipStartDeg;
         SettingsSlider _ffbrearSlipFullDeg;
         SettingsSliderInt _ffbrearSlipMinSpeed;
-        SettingsSlider _ffbdriftSpringMul;
         SettingsSlider _ffbdriftDamperMul;
         SettingsSlider _ffbdriftMzMul;
         SettingsSlider _ffbdriftTrailMul;
 
-        SettingsSlider _ffbSteeringSpring;
         SettingsSlider _ffbSteeringFriction;
         SettingsSlider _ffbFrictionDeadVel;
         SettingsSlider _ffbDamperStop;
@@ -190,8 +154,6 @@ namespace RPMLeds
         List<SettingsText> FFBLables = new List<SettingsText>();
         SettingsSlider _ffbMzGain;
         SettingsSlider _ffbTrailMeters;
-        SettingsSliderInt _SteeringRackRatio;
-        SettingsCheckBox _ffbCustomRackRatio;
         SettingsCheckBox _ffbInvertForce;
 
         SettingsButton _LUTShow;
@@ -199,7 +161,6 @@ namespace RPMLeds
         #endregion
 
         #region Vars
-        bool useCustomRatio = false;
         private FfbLut _lut = new FfbLut();
         bool LUTEnabled = false;
         bool _IsToggleByCar = false;
@@ -273,12 +234,12 @@ namespace RPMLeds
                 {
                     ok = LogitechGSDK.LogiSteeringInitialize(false);
                 }
-                catch(UnityException ex)
+                catch (UnityException ex)
                 {
                     ModConsole.Error($"Logi Steering Initialize function failed:\n{ex.Message}");
                     return false;
                 }
-                 
+
                 if (ok)
                     initialized = true;
 
@@ -367,7 +328,7 @@ namespace RPMLeds
         {
             _IsToggleByCar = _ffbToglePerCar.GetValue();
             CARSTOGGLE.Clear();
-            foreach(var carCB in _ffbTogledCarsList)
+            foreach (var carCB in _ffbTogledCarsList)
             {
                 carCB.CB.SetVisibility(_IsToggleByCar);
                 CARSTOGGLE.Add(carCB.CarName, carCB.CB.GetValue());
@@ -381,11 +342,9 @@ namespace RPMLeds
         private void FFBSettingsChanged()
         {
             bool advOn = _enableAdvancedFFB.GetValue();
-            foreach(var lable in FFBLables)
+            foreach (var lable in FFBLables)
                 lable.SetVisibility(advOn);
-            _ffbCustomRackRatio.SetVisibility(advOn);
-            _SteeringRackRatio.SetVisibility(_ffbCustomRackRatio.GetValue());
- 
+
             _ffbbumpGain.SetVisibility(advOn);
             _ffbbumpDead.SetVisibility(advOn);
             _ffbbumpClamp.SetVisibility(advOn);
@@ -393,18 +352,15 @@ namespace RPMLeds
             _ffbrearSlipStartDeg.SetVisibility(advOn);
             _ffbrearSlipFullDeg.SetVisibility(advOn);
             _ffbrearSlipMinSpeed.SetVisibility(advOn);
-            _ffbdriftSpringMul.SetVisibility(advOn);
             _ffbdriftDamperMul.SetVisibility(advOn);
             _ffbdriftMzMul.SetVisibility(advOn);
             _ffbdriftTrailMul.SetVisibility(advOn);
 
-            useCustomRatio = _ffbCustomRackRatio.GetValue();
-            steeringRackRatio = _SteeringRackRatio.GetValue();
             rearSlipStartDeg = _ffbrearSlipStartDeg.GetValue();
             rearSlipFullDeg = _ffbrearSlipFullDeg.GetValue();
             rearSlipMinSpeed = _ffbrearSlipMinSpeed.GetValue();
 
-            driftSpringMul = _ffbdriftSpringMul.GetValue();
+
             driftDamperMul = _ffbdriftDamperMul.GetValue();
             driftMzMul = _ffbdriftMzMul.GetValue();
             driftTrailMul = _ffbdriftTrailMul.GetValue();
@@ -426,21 +382,11 @@ namespace RPMLeds
             mzGain = _ffbMzGain.GetValue();
             trailMeters = _ffbTrailMeters.GetValue();
 
-            _ffbSpringMoveBoost.SetVisibility(advOn);
-            _ffbSpringBoostSpeed.SetVisibility(advOn);
-            _ffbSpringLockBoost.SetVisibility(advOn);
-            _ffbSpringLockStart.SetVisibility(advOn);
-
-            springMoveBoost = _ffbSpringMoveBoost.GetValue();
-            springBoostSpeed = _ffbSpringBoostSpeed.GetValue();
-            springLockBoost = _ffbSpringLockBoost.GetValue();
-            springLockStart = _ffbSpringLockStart.GetValue();
 
             _ffbTorqueScale.SetVisibility(advOn);
             _ffbMaxForce.SetVisibility(advOn);
             _ffbInvertForce.SetVisibility(advOn);
 
-            _ffbSteeringSpring.SetVisibility(advOn);
             _ffbSteeringFriction.SetVisibility(advOn);
             _ffbFrictionDeadVel.SetVisibility(advOn);
 
@@ -464,26 +410,6 @@ namespace RPMLeds
             _ffbLandInTime.SetVisibility(advOn);
 
 
-            _scrubRadiusPct.SetVisibility(advOn);
-
-
-            _satStart.SetVisibility(advOn);
-            _satFull.SetVisibility(advOn);
-            _satDropPct.SetVisibility(advOn);
-
-            _bankTiltPct.SetVisibility(advOn);
-            _camberGain.SetVisibility(advOn);
-            _casterGain.SetVisibility(advOn);
-
-
-            var bumpCompOn = _bumpUseCompVel.GetValue();
-
-            _compVelGain.SetVisibility(bumpCompOn);       
-            _compVelClamp.SetVisibility(bumpCompOn);        
-            _compVelDead.SetVisibility(bumpCompOn);          
-            _rearCompPct.SetVisibility(bumpCompOn);
-
-            steeringSpring = _ffbSteeringSpring.GetValue();
             steeringFriction = _ffbSteeringFriction.GetValue();
             frictionDeadVel = _ffbFrictionDeadVel.GetValue();
 
@@ -509,25 +435,6 @@ namespace RPMLeds
             landInTime = _ffbLandInTime.GetValue();
 
             forceInvert = _ffbInvertForce.GetValue();
-
-            scrubRadiusMeters = (_scrubRadiusPct.GetValue() / 100f) * 0.08f;
-
-            // SAT drop
-            satStart = _satStart.GetValue();
-            satFull = _satFull.GetValue();
-            satDrop = (_satDropPct.GetValue() / 100f) * 0.8f; // 0..0.8
-
-            // Bank/camber/caster
-            bankTiltGain = _bankTiltPct.GetValue() / 100f; // 0..1
-            camberGain = _camberGain.GetValue();
-            casterGain = _casterGain.GetValue();
-
-            // Compression velocity bumps
-            bumpUseCompressionVel = _bumpUseCompVel.GetValue();
-            compVelGain = _compVelGain.GetValue();
-            compVelClamp = _compVelClamp.GetValue();
-            compVelDead = _compVelDead.GetValue();
-            rearCompScale = _rearCompPct.GetValue() / 100f; // 0..1
         }
         private void OnGui()
         {
@@ -560,174 +467,70 @@ namespace RPMLeds
             SettingsTranslationExtensions.AddHeader("Advanced FFB Settings");
             _ConstantSoftStop = SettingsTranslationExtensions.AddSlider("_ConstantSoftStop", "Wheel Soft Stop at range %", 0, 100, 98, SettingChanged, visibleByDefault: false);
             _ConstantDamper = SettingsTranslationExtensions.AddSlider("_ConstantDamper", "Constant Damper (St. Wheel rotate resistance)", 0, 100, 15, SettingChanged, visibleByDefault: false);
-          
-            _ffbTorqueScale = SettingsTranslationExtensions.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
-          
-            _ffbMaxForce = SettingsTranslationExtensions.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 98f, SettingChanged, visibleByDefault: false);
-          
-            _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", true, SettingChanged, visibleByDefault: false);
-          
-            _ffbSteeringSpring = SettingsTranslationExtensions.AddSlider("_ffbSteeringSpring", "Steering Spring", 0f, 100f, 20, SettingChanged, visibleByDefault: false);
 
-            _ffbSpringBoostSpeed = SettingsTranslationExtensions.AddSlider("_ffbSpringBoostSpeed","Speed For Full Spring Boost (m/s)",0f, 50f, 2f,SettingChanged,visibleByDefault: false);
-          
-            _ffbSpringMoveBoost = SettingsTranslationExtensions.AddSlider("_ffbSpringMoveBoost", "Spring Boost While Moving", 0f, 100f, 10f, SettingChanged, visibleByDefault: false);
-          
-            _ffbSpringLockBoost = SettingsTranslationExtensions.AddSlider("_ffbSpringLockBoost","Spring Boost Near Full Lock", 0f, 5f, 1.1f, SettingChanged,visibleByDefault: false);
-          
-            _ffbSpringLockStart = SettingsTranslationExtensions.AddSlider("_ffbSpringLockStart", "Start Lock Boost At (0-1)", 0f, 1f, 0.7f,SettingChanged, visibleByDefault: false);
-          
-            _ffbSteeringFriction = SettingsTranslationExtensions.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
-          
-            _ffbFrictionDeadVel = SettingsTranslationExtensions.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0f, SettingChanged, visibleByDefault: false);
-          
-            _ffbDamperStop = SettingsTranslationExtensions.AddSlider("_ffbDamperStop", "Damper Stationary", 0f, 2f, 0.4f, SettingChanged, visibleByDefault: false);
-          
-            _ffbDamperRoll = SettingsTranslationExtensions.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.1f, SettingChanged, visibleByDefault: false);
-          
-            _ffbDamperFast = SettingsTranslationExtensions.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 10f, 2.1f, SettingChanged, visibleByDefault: false);
-          
+            _ffbTorqueScale = SettingsTranslationExtensions.AddSlider("_ffbTorqueScale", "Torque Scale", 0.001f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
+
+            _ffbMaxForce = SettingsTranslationExtensions.AddSlider("_ffbMaxForce", "Max Force", 0f, 100f, 98f, SettingChanged, visibleByDefault: false);
+
+            _ffbInvertForce = Settings.AddCheckBox("_ffbInvertForce", "Invert Force", true, SettingChanged, visibleByDefault: false);
+
+            _ffbSteeringFriction = SettingsTranslationExtensions.AddSlider("_ffbSteeringFriction", "Steering Friction", 0f, 2f, 0.4f, SettingChanged, visibleByDefault: false);
+
+            _ffbFrictionDeadVel = SettingsTranslationExtensions.AddSlider("_ffbFrictionDeadVel", "Friction Dead Vel", 0f, 5f, 0.1f, SettingChanged, visibleByDefault: false);
+
+            _ffbDamperStop = SettingsTranslationExtensions.AddSlider("_ffbDamperStop", "Damper Stationary", 0f, 2f, 0.15f, SettingChanged, visibleByDefault: false);
+
+            _ffbDamperRoll = SettingsTranslationExtensions.AddSlider("_ffbDamperRoll", "Damper Roll", 0f, 2f, 0.08f, SettingChanged, visibleByDefault: false);
+
+            _ffbDamperFast = SettingsTranslationExtensions.AddSlider("_ffbDamperFast", "Damper Fast", 0f, 10f, 4.85f, SettingChanged, visibleByDefault: false);
+
             _ffbDamperLowSpeed = SettingsTranslationExtensions.AddSlider("_ffbDamperLowSpeed", "Damper Low Speed Stationary → Roll  (m/s)", 0f, 50f, 0.85f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbDamperHighSpeed = SettingsTranslationExtensions.AddSlider("_ffbDamperHighSpeed", "Damper High Speed (m/s)", 0f, 80f, 20f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbMzNormalize = SettingsTranslationExtensions.AddSlider("_ffbMzNormalize", "Mz Normalize", 0f, 10000f, 810, SettingChanged, visibleByDefault: false);
-          
+
             _ffbMzSoftPower = SettingsTranslationExtensions.AddSlider("_ffbMzSoftPower", "Mz Soft Power", 0.1f, 8f, 1.17f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbTorqueSmoothing = SettingsTranslationExtensions.AddSlider("_ffbTorqueSmoothing", "Torque Smoothing", 0f, 1f, 0.04f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbSoftLimitK = SettingsTranslationExtensions.AddSlider("_ffbSoftLimitK", "Soft Limit K", 0f, 0.500f, 0f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbRateUpPerSec = SettingsTranslationExtensions.AddSlider("_ffbRateUpPerSec", "Rate Up / sec", 0f, 2000f, 450f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbRateDownPerSec = SettingsTranslationExtensions.AddSlider("_ffbRateDownPerSec", "Rate Down / sec", 0f, 2000f, 1200f, SettingChanged, visibleByDefault: false);
-          
-            _ffbMinNormalForceForFFB = SettingsTranslationExtensions.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 315f, SettingChanged, visibleByDefault: false);
-          
-            _ffbAirHardReleasePerSec = SettingsTranslationExtensions.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 2560, SettingChanged, visibleByDefault: false);
-          
+
+            _ffbMinNormalForceForFFB = SettingsTranslationExtensions.AddSlider("_ffbMinNormalForceForFFB", "Min Normal Force", 0f, 10000f, 312f, SettingChanged, visibleByDefault: false);
+
+            _ffbAirHardReleasePerSec = SettingsTranslationExtensions.AddSlider("_ffbAirHardReleasePerSec", "Air Hard Release / sec", 0f, 10000f, 2564, SettingChanged, visibleByDefault: false);
+
             _ffbAirFilterReset = SettingsTranslationExtensions.AddSlider("_ffbAirFilterReset", "Air Filter Reset", 0f, 2f, 0.2f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbLandInTime = SettingsTranslationExtensions.AddSlider("_ffbLandInTime", "Land In Time", 0f, 2f, 0.18f, SettingChanged, visibleByDefault: false);
-          
-            _ffbMzGain = SettingsTranslationExtensions.AddSlider("_ffbMzGain","Aligning Torque Gain (Mz)",0.5f, 3.0f, 1.8f,SettingChanged,visibleByDefault: false);
-          
-            _ffbTrailMeters = SettingsTranslationExtensions.AddSlider("_ffbTrailMeters","Steering Trail (meters)",0.0f, 0.55f, 0.02f,SettingChanged,visibleByDefault: false );
-          
-            _ffbbumpGain = SettingsTranslationExtensions.AddSlider("_ffbbumpGain", "Bump Gain", 0.0f, 0.2f, 0.0628f, SettingChanged, visibleByDefault: false,decimalPoints:4);
-          
+
+            _ffbMzGain = SettingsTranslationExtensions.AddSlider("_ffbMzGain", "Aligning Torque Gain (Mz)", 0.5f, 3.0f, 1.2f, SettingChanged, visibleByDefault: false);
+
+            _ffbTrailMeters = SettingsTranslationExtensions.AddSlider("_ffbTrailMeters", "Steering Trail (meters)", 0.0f, 0.55f, 0.02f, SettingChanged, visibleByDefault: false);
+
+            _ffbbumpGain = SettingsTranslationExtensions.AddSlider("_ffbbumpGain", "Bump Gain", 0.0f, 0.2f, 0.0628f, SettingChanged, visibleByDefault: false, decimalPoints: 4);
+
             _ffbbumpDead = SettingsTranslationExtensions.AddSlider("_ffbbumpDead", "Bump Dead Zone (N/s)", 0, 15000, 3900, SettingChanged, visibleByDefault: false);
-           
+
             _ffbbumpClamp = SettingsTranslationExtensions.AddSlider("_ffbbumpClamp", "Bump Clamp", 0.0f, 5000f, 4070, SettingChanged, visibleByDefault: false);
-          
+
             _ffbbumpSmoothing = SettingsTranslationExtensions.AddSlider("_ffbbumpSmoothing", "Bump Smoothing", 0.0f, 1f, 0.85f, SettingChanged, visibleByDefault: false);
-            
+
             _ffbrearSlipStartDeg = SettingsTranslationExtensions.AddSlider("_ffbrearSlipStartDeg", "Start modulation Deg", 0.0f, 10f, 3f, SettingChanged, visibleByDefault: false);
 
             _ffbrearSlipFullDeg = SettingsTranslationExtensions.AddSlider("_ffbrearSlipFullDeg", "Rear Slip Full Deg", 0.0f, 50, 18, SettingChanged, visibleByDefault: false);
-          
-            _ffbrearSlipMinSpeed = SettingsTranslationExtensions.AddSlider("_ffbrearSlipMinSpeed", "Rear Slip Min Speed (m/s)", 0, 15, 3, SettingChanged, visibleByDefault: false);
 
-            _ffbdriftSpringMul = SettingsTranslationExtensions.AddSlider("_ffbdriftSpringMul", "Drift Spring Mul", 0.0f, 1, 0.65f, SettingChanged, visibleByDefault: false);
+            _ffbrearSlipMinSpeed = SettingsTranslationExtensions.AddSlider("_ffbrearSlipMinSpeed", "Rear Slip Min Speed (m/s)", 0, 15, 3, SettingChanged, visibleByDefault: false);
           
             _ffbdriftDamperMul = SettingsTranslationExtensions.AddSlider("_ffbdriftDamperMul", "Drift Damper Mul", 0.0f, 1, 0.80f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbdriftMzMul = SettingsTranslationExtensions.AddSlider("_ffbdriftMzMul", "Drift Mz Mul", 0.0f, 5, 1.2f, SettingChanged, visibleByDefault: false);
-          
+
             _ffbdriftTrailMul = SettingsTranslationExtensions.AddSlider("_ffbdriftTrailMul", "Drift Trail Mul", 0.0f, 5, 1.15f, SettingChanged, visibleByDefault: false);
-            _ffbCustomRackRatio = SettingsTranslationExtensions.AddCheckBox("_ffbCustomRackRatio", "Use Custom Rack Ratio", false,SettingChanged, visibleByDefault: false);
-            _SteeringRackRatio = SettingsTranslationExtensions.AddSlider("_SteeringRackRatio", "Rack Ratio", 1, 55, 26, SettingChanged, visibleByDefault: false);
-            // =====================
-            // Advanced FFB: Geometry / SAT / Bumps
-            // =====================
-
-            // --- Scrub radius ---
-            _scrubRadiusPct = Settings.AddSlider(
-                "_scrubRadiusPct",
-                "Scrub Radius (%)",
-                0f, 100f, 37.5f, // 0.03 / 0.08 = 0.375
-                SettingChanged,
-                visibleByDefault: false);
-
-            // --- SAT drop ---
-            _satStart = Settings.AddSlider(
-                "_satStart",
-                "SAT Drop Start",
-                0.5f, 2.5f, 1.0f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _satFull = Settings.AddSlider(
-                "_satFull",
-                "SAT Drop Full",
-                0.8f, 3.0f, 1.7f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _satDropPct = Settings.AddSlider(
-                "_satDropPct",
-                "SAT Drop Amount (%)",
-                0f, 100f, 68.75f, // 0.55 / 0.8 = 0.6875
-                SettingChanged,
-                visibleByDefault: false);
-
-            // --- Bank / camber / caster ---
-            _bankTiltPct = Settings.AddSlider(
-                "_bankTiltPct",
-                "Bank Tilt Gain (%)",
-                0f, 100f, 35f, // 0.35 / 1.0
-                SettingChanged,
-                visibleByDefault: false);
-
-            _camberGain = Settings.AddSlider(
-                "_camberGain",
-                "Camber Gain",
-                0.000f, 0.050f, 0.015f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _casterGain = Settings.AddSlider(
-                "_casterGain",
-                "Caster Gain",
-                0.000f, 0.050f, 0.012f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            // --- Compression velocity bumps ---
-            _bumpUseCompVel = Settings.AddCheckBox(
-                "_bumpUseCompVel",
-                "Bump: Use Compression Velocity",
-                true,
-                SettingChanged);
-
-            _compVelGain = Settings.AddSlider(
-                "_compVelGain",
-                "Bump: Compression Vel Gain",
-                0.0f, 3.0f, 1.2f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _compVelClamp = Settings.AddSlider(
-                "_compVelClamp",
-                "Bump: Compression Vel Clamp",
-                0.0f, 3.0f, 1.0f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _compVelDead = Settings.AddSlider(
-                "_compVelDead",
-                "Bump: Compression Vel Deadzone",
-                0.0f, 1.0f, 0.0f,
-                SettingChanged,
-                visibleByDefault: false);
-
-            _rearCompPct = Settings.AddSlider(
-                "_rearCompPct",
-                "Bump: Rear Compression Scale (%)",
-                0f, 100f, 35f, // 0.35
-                SettingChanged,
-                visibleByDefault: false);
 
             _ffbEnableLUT = SettingsTranslationExtensions.AddCheckBox("_ffbEnableLUT", "Enable LUT", false, SettingChanged, visibleByDefault: false);
             _LUTShow = Settings.AddButton("Show LUT Curve", ShowLUTGui, false);
@@ -762,12 +565,12 @@ namespace RPMLeds
 
             _ffbTogledCarsList.Clear();
 
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Corris", CB = Settings.AddCheckBox("_TGCorris", "Corris", true, CarToggleChanged, visibleByDefault: false)});
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Sorbet", CB = Settings.AddCheckBox("_TGSorbet", "Sorbet", true, CarToggleChanged, visibleByDefault: false)});
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Taxi", CB = Settings.AddCheckBox("_TGTaxi", "Taxi", true, CarToggleChanged, visibleByDefault: false)});
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Kekmet", CB = Settings.AddCheckBox("_TGKekmet", "Kekmet", true, CarToggleChanged, visibleByDefault: false)});
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Gifu", CB = Settings.AddCheckBox("_TGGifu", "Gifu", true, CarToggleChanged, visibleByDefault: false)});
-            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Bachglotz", CB = Settings.AddCheckBox("_TGBachglotz", "Bachglotz", true, CarToggleChanged, visibleByDefault: false)});
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Corris", CB = Settings.AddCheckBox("_TGCorris", "Corris", true, CarToggleChanged, visibleByDefault: false) });
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Sorbet", CB = Settings.AddCheckBox("_TGSorbet", "Sorbet", true, CarToggleChanged, visibleByDefault: false) });
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Taxi", CB = Settings.AddCheckBox("_TGTaxi", "Taxi", true, CarToggleChanged, visibleByDefault: false) });
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Kekmet", CB = Settings.AddCheckBox("_TGKekmet", "Kekmet", true, CarToggleChanged, visibleByDefault: false) });
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Gifu", CB = Settings.AddCheckBox("_TGGifu", "Gifu", true, CarToggleChanged, visibleByDefault: false) });
+            _ffbTogledCarsList.Add(new ToggledCar { CarName = "Bachglotz", CB = Settings.AddCheckBox("_TGBachglotz", "Bachglotz", true, CarToggleChanged, visibleByDefault: false) });
 
             SettingsTranslationExtensions.AddHeader("Properties for Profiler (LGS)");
             SettingsTranslationExtensions.AddText("*BETA MAY CAUSE CRASH* Use if your wheel is set up via Profiler (Logitech Gaming Software) *BETA* Need Testers for LGS");
@@ -792,8 +595,8 @@ namespace RPMLeds
             _DIMultyply = SettingsTranslationExtensions.AddSlider("_DIMultyply", "Direct Input FFB Force Multiply", 1, 10000, 1000, SettingChanged, visibleByDefault: false);
             _SendMozaTelemtry = SettingsTranslationExtensions.AddCheckBox("_SendMozaTelemtry", "Send Telemetry to Pit House", false, SettingChanged, visibleByDefault: false);
 
-            _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged,visibleByDefault:false);
-            
+            _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged, visibleByDefault: false);
+
         }
         private void ShowLUTGui()
         {
@@ -850,7 +653,7 @@ namespace RPMLeds
                 actualState = string.Empty;
             }
 
-             UseDirectInputFFB = _UseDIFFB.GetValue();
+            UseDirectInputFFB = _UseDIFFB.GetValue();
             _DIMultyply.SetVisibility(UseDirectInputFFB);
             _SendMozaTelemtry.SetVisibility(UseDirectInputFFB);
 
@@ -892,7 +695,7 @@ namespace RPMLeds
                 Name = Name,
                 Path = Path,
                 PartValue = value,
-                Installed = installed, 
+                Installed = installed,
             };
         }
         public class RegularCarInfo
@@ -903,15 +706,13 @@ namespace RPMLeds
             public Rigidbody Rigidbody;
             public Axles Axles;
             public float LastSteeringAngle; //Set By ffb to calculat steering velocity
-            public FsmFloat RackRatio;
-
+            public AxisCarController AxisCarController;
             public bool IsCorris;
             public static RegularCarInfo initCar(string carName)
             {
                 var car = GameObject.Find(carName);
                 var ffbComp = car.GetComponent<ForceFeedback>();
                 var drivetrainComp = car.GetComponent<Drivetrain>();
-                //var rackInfo = car.GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "SteerLimit").FirstOrDefault().GetVariable<FsmFloat>("MaxAngle");
                 return new RegularCarInfo
                 {
                     FFBComp = ffbComp,
@@ -919,11 +720,12 @@ namespace RPMLeds
                     CarObject = car,
                     Rigidbody = car.GetComponent<Rigidbody>(),
                     Axles = car.GetComponent<Axles>(),
+                    AxisCarController = car.GetComponent<AxisCarController>(),
                     IsCorris = carName == "CORRIS"
                 };
             }
         }
-        bool setSteerAngle = false;       
+        bool setSteerAngle = false;
         private void Mod_OnLoad()
         {
             Patch = _modEnabled.GetValue();
@@ -931,7 +733,7 @@ namespace RPMLeds
             currentVeh = FsmVariables.GlobalVariables.GetFsmString("PlayerCurrentVehicle");
 
             maxSteeringAngle = GameObject.Find("Systems/OptionsDB").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
-            
+
             raceTachot = InitPartValue("Tacho", "VINP_Tachometer", "SettingRPM");
             revLimit = InitPartValue("RevLimiter", "VINP_Revlimiter", "SettingRPM");
             CARS.Clear();
@@ -946,9 +748,9 @@ namespace RPMLeds
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
             ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
-
             if (UseDirectInputFFB)
                 InitDIFFB();
+
         }
         private void LoadLut()
         {
@@ -992,7 +794,7 @@ namespace RPMLeds
         }
         private void SetForcesToZero()
         {
-            if(!UseDirectInputFFB)
+            if (!UseDirectInputFFB)
             {
                 if (!LogitechGSDK.LogiIsConnected(_CONTROLLERINDEX)) return;
                 LogitechGSDK.LogiStopSoftstopForce(_CONTROLLERINDEX);
@@ -1041,9 +843,9 @@ namespace RPMLeds
             PlayLedsCall(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
 
         }
-        private void PlayLedsCall(int controllerIndex,float currentRpm,float startRpm, float endRpm)
+        private void PlayLedsCall(int controllerIndex, float currentRpm, float startRpm, float endRpm)
         {
-            if(!UseDirectInputFFB)
+            if (!UseDirectInputFFB)
                 LogitechGSDK.LogiPlayLeds(controllerIndex, currentRpm, startRpm, endRpm);
         }
         private bool LogiOK()
@@ -1065,25 +867,26 @@ namespace RPMLeds
                     SetForcesToZero();
                 return;
             }
-            if(!UseDirectInputFFB)
+            if (!UseDirectInputFFB)
             {
                 if (!LogiOK()) return;
             }
 
             CURRENTCAR = CARS[currentVeh.Value];
 
-            if (CURRENTCAR == null) {
+            if (CURRENTCAR == null)
+            {
                 ModConsole.Error("Current Car not found it cars list");
                 return;
             }
 
             currentRPM = CURRENTCAR.Drivetrain.rpm;
             currentSpeed = Mathf.Abs(CURRENTCAR.Drivetrain.differentialSpeed);
-            
+
 
             if (currentRPM > 50 && ledsEnabled)
             {
-                if(!UseDirectInputFFB)
+                if (!UseDirectInputFFB)
                     PlayLogiRPMLeds();
             }
 
@@ -1112,10 +915,10 @@ namespace RPMLeds
             }
             SetDeviceForcesXY(force, 0);
         }
-        private void PlayLogiFFB(int vanillaForce,bool advanced)
+        private void PlayLogiFFB(int vanillaForce, bool advanced)
         {
             var force = vanillaForce / 100;
-            if(advanced)
+            if (advanced)
             {
                 if (!softStopEnable)
                 {
@@ -1126,7 +929,7 @@ namespace RPMLeds
                 var state = LogitechGSDK.LogiGetStateCSharp(_CONTROLLERINDEX);
                 force = CalculateForces(CURRENTCAR, state.lX);
             }
-            
+
             LogitechGSDK.LogiPlayConstantForce(_CONTROLLERINDEX, force);
         }
         #region FFB Settings
@@ -1136,7 +939,7 @@ namespace RPMLeds
         private float rearSlipFullDeg = 18f;    // full modulation
         private float rearSlipMinSpeed = 3f;     // m/s
 
-        private float driftSpringMul = 0.65f;  // spring reduced to 65% at full rear slip
+      
         private float driftDamperMul = 0.80f;  // damper reduced to 80% at full rear slip
         private float driftMzMul = 1.20f;  // Mz gain boosted to 120% at full rear slip
         private float driftTrailMul = 1.15f;  // trail boosted to 115% at full rear slip
@@ -1151,7 +954,6 @@ namespace RPMLeds
         private float bumpClamp = 2.0f;        // clamp bump torque (torque units)
         private float bumpSmoothing = 0.35f;   // 0.2–0.6
 
-        private float steeringSpring = 4.0f;        // small centering (1–4)
         private float steeringFriction = 1.1f;      // rack friction (0.4–1.5)
         private float frictionDeadVel = 0.01f;      // deg/s deadzone (if using wheel deg), tweak as needed
 
@@ -1181,10 +983,6 @@ namespace RPMLeds
         private float airFilterReset = 0.35f;
         private float landInTime = 0.35f;
 
-        private float springMoveBoost = 2.5f;     // extra spring when moving
-        private float springBoostSpeed = 6f;      // m/s where boost reaches max
-        private float springLockBoost = 2.0f;     // extra boost near full lock
-        private float springLockStart = 0.6f;
 
         private float mzGain = 1.4f;        // 1.0–2.5 (more = stronger natural self-steer)
         private float trailMeters = 0.06f;  // 0.03–0.10 meters (more = more self-steer)
@@ -1192,27 +990,10 @@ namespace RPMLeds
         private float filteredTorque = 0f;
         private float lastSentForce = 0f;
         private float contactBlend = 1f;
-    
-        private float scrubRadiusMeters = 0.03f;    // 0..0.08
 
-        // SAT drop
-        private float satStart = 1.0f;              // start drop at ~peak
-        private float satFull = 1.7f;              // full drop by this
-        private float satDrop = 0.55f;             // 0..0.8
-
-        // Bank/camber/caster
-        private float bankTiltGain = 0.35f;         // 0..1
-        private float camberGain = 0.015f;        // small!
-        private float casterGain = 0.012f;        // small!
-
-        // Compression-velocity bumps (optional)
-        private bool bumpUseCompressionVel = true;
-        private float compVelGain = 1.2f;
-        private float compVelClamp = 1.0f;
-        private float compVelDead = 0.0f;          // optional
-        private float rearCompScale = 0.35f;
-        private float steeringRackRatio = 8;
-
+        // Wheel angle tracking (software damper uses this)
+        private bool wheelAngleInited = false;
+        private float lastWheelDeg = 0f;
         #endregion
         private static float SoftLimit(float x, float k) => x / (1f + k * Mathf.Abs(x));
         private static float PowSigned(float x, float p)
@@ -1223,22 +1004,14 @@ namespace RPMLeds
 
         private float _flPrevFz, _frPrevFz, _rlPrevFz, _rrPrevFz;
         private float _bumpFiltered;
-        private bool wheelAngleInited = false;
-        private float lastWheelDeg = 0f;
-        private float _flPrevComp, _frPrevComp, _rlPrevComp, _rrPrevComp;
-        private float _lastWheelVelDegPerSec;
-        private float _wheelAccDegPerSec2;
-
-
         private int CalculateForces(RegularCarInfo Car, int WheelDInputPositionValue)
         {
             float dt = Time.fixedDeltaTime;
 
-            // ===== 1) Read physical wheel angle =====
-            float maxWheelAngle = maxSteeringAngle.Value; // deg (e.g. 900)
-            float wheelDeg = WheelDInputPositionValue * (maxWheelAngle / 32767f);
+            // ===== 1) Read physical wheel angle (preferred) =====
+            float maxWheelAngle = maxSteeringAngle.Value;
+            float wheelDeg = WheelDInputPositionValue * (maxWheelAngle / 32767f); // adjust if you use 1080/540 etc.
 
-            // ===== wheel velocity (deg/s) =====
             if (!wheelAngleInited)
             {
                 wheelAngleInited = true;
@@ -1254,22 +1027,9 @@ namespace RPMLeds
                 _frPrevFz = fr0.normalForce;
                 _rlPrevFz = rl0.normalForce;
                 _rrPrevFz = rr0.normalForce;
-
-                _flPrevComp = fl0.compression;
-                _frPrevComp = fr0.compression;
-                _rlPrevComp = rl0.compression;
-                _rrPrevComp = rr0.compression;
-
-                _wheelAccDegPerSec2 = 0f;
-                _bumpFiltered = 0f;
-                filteredTorque = 0f;
-                lastSentForce = 0f;
-                contactBlend = 0f;
             }
 
             float wheelVelDegPerSec = (wheelDeg - lastWheelDeg) / dt;
-            float wheelAccDegPerSec2 = (wheelVelDegPerSec - _lastWheelVelDegPerSec) / dt;
-            _lastWheelVelDegPerSec = wheelVelDegPerSec;
             lastWheelDeg = wheelDeg;
 
             // ===== 2) Car speed =====
@@ -1295,7 +1055,7 @@ namespace RPMLeds
             contactBlend = Mathf.MoveTowards(contactBlend, targetBlend, (targetBlend > contactBlend) ? inStep : 1f);
 
             // ===== 5) Wheel normalization (-1..1) =====
-            float wheelHalfRangeDeg = Mathf.Max(1f, maxWheelAngle * 0.5f);
+            float wheelHalfRangeDeg = maxWheelAngle / 2; // for 900°
             float wheelNorm = Mathf.Clamp(wheelDeg / wheelHalfRangeDeg, -1f, 1f);
 
             // ===== 6) Rear slip factor (0..1) -> modulates parameters (NO extra assist torque) =====
@@ -1303,24 +1063,20 @@ namespace RPMLeds
             if (rearLoaded && speed > rearSlipMinSpeed)
             {
                 float rearSlipDeg = (Mathf.Abs(rl.slipAngle) + Mathf.Abs(rr.slipAngle)) * 0.5f;
-                float slip01 = Mathf.Clamp01(Mathf.InverseLerp(rearSlipStartDeg, rearSlipFullDeg, rearSlipDeg));
+
+                float slip01 = Mathf.InverseLerp(rearSlipStartDeg, rearSlipFullDeg, rearSlipDeg);
+                slip01 = Mathf.Clamp01(slip01);
+
                 float speed01 = Mathf.Clamp01((speed - rearSlipMinSpeed) / 10f);
+
                 rearSlip01 = slip01 * speed01;
             }
 
-            float springMul = Mathf.Lerp(1f, driftSpringMul, rearSlip01);
+
             float damperMul = Mathf.Lerp(1f, driftDamperMul, rearSlip01);
             float mzMul = Mathf.Lerp(1f, driftMzMul, rearSlip01);
             float trailMul = Mathf.Lerp(1f, driftTrailMul, rearSlip01);
 
-            // ===== 7) Spring (use wheel angle, not input) =====
-            float baseSpring = steeringSpring * springMul;
-
-            float speed01Spring = Mathf.Clamp01(speed / springBoostSpeed);
-            float lock01 = Mathf.InverseLerp(springLockStart, 1f, Mathf.Abs(wheelNorm));
-            float springMult = 1f + speed01Spring * springMoveBoost + lock01 * springLockBoost;
-
-            float springTorque = frontLoaded ? (-wheelNorm * baseSpring * springMult) : 0f;
 
             // ===== 8) Software damper (analog), speed-shaped =====
             float low01 = Mathf.Clamp01(speed / damperLowSpeed);
@@ -1337,88 +1093,27 @@ namespace RPMLeds
             if (Mathf.Abs(wheelVelDegPerSec) > frictionDeadVel)
                 frictionTorque = -Mathf.Sign(wheelVelDegPerSec) * steeringFriction;
 
-            // =====================================================================================
-            // 10) Tire aligning torque (Mz + trail + scrub) with:
-            //     - load weighting (Ackermann realism)
-            //     - grip-limit SAT drop using lateralSlip (understeer lightens wheel)
-            //     - bank/camber/caster influence (small, stable)
-            //     - rack ratio conversion (rack -> wheel)
-            // =====================================================================================
+            // ===== 10) Tire aligning torque (Mz + trail from Fy) softened near center =====
             float tireTorque = 0f;
-            float sat01 = 0f;
-            float bankMul = 1f;
-
             if (frontLoaded)
             {
-                // ---- load weighting
-                float fzSum = fl.normalForce + fr.normalForce + 0.001f;
-                float wL = fl.normalForce / fzSum;
-                float wR = fr.normalForce / fzSum;
+                float rawMz = (fl.Mz + fr.Mz) * (mzGain * mzMul);
 
-                // ---- per-wheel moments
-                float mzL = fl.Mz * (mzGain * mzMul);
-                float mzR = fr.Mz * (mzGain * mzMul);
+                // If direction feels wrong, flip sign once:
+                // float rawTrail = -(fl.Fy + fr.Fy) * (trailMeters * trailMul);
+                float rawTrail = (fl.Fy + fr.Fy) * (trailMeters * trailMul);
 
-                float trailL = fl.Fy * (trailMeters * trailMul);
-                float trailR = fr.Fy * (trailMeters * trailMul);
+                float rawAlign = rawMz + rawTrail;
 
-                float scrubL = fl.Fy * scrubRadiusMeters;
-                float scrubR = fr.Fy * scrubRadiusMeters;
+                float normAlign = Mathf.Clamp(rawAlign / mzNormalize, -1f, 1f);
+                float softenedAlign = PowSigned(normAlign, mzSoftPower) * mzNormalize;
 
-                float rawAlignRack = (mzL + trailL + scrubL) * wL + (mzR + trailR + scrubR) * wR;
-
-                // ---- SAT drop (understeer/limit = lighter wheel)
-                // lateralSlip is normalized (slipAngle / idealSlipAngle). Peak ~ 1.
-                float satL = Mathf.Clamp01(Mathf.InverseLerp(satStart, satFull, Mathf.Abs(fl.lateralSlip)));
-                float satR = Mathf.Clamp01(Mathf.InverseLerp(satStart, satFull, Mathf.Abs(fr.lateralSlip)));
-                sat01 = Mathf.Max(satL, satR);
-                rawAlignRack *= (1f - sat01 * satDrop);
-
-                // ---- bank/camber/caster influence (keep gentle)
-                // tilt = how different the suspension "up" is from ground normal (0 = flat).
-                // Use Wheel.hitDown.normal if available; else fall back to groundNormal.
-                Vector3 nL = fl.hitDown.normal;
-                Vector3 nR = fr.hitDown.normal;
-
-                float tiltL = 1f - Mathf.Clamp01(Vector3.Dot(nL, fl.transform.up));
-                float tiltR = 1f - Mathf.Clamp01(Vector3.Dot(nR, fr.transform.up));
-                float tilt = tiltL * wL + tiltR * wR;
-
-                float camberAbs = (Mathf.Abs(fl.camber) * wL + Mathf.Abs(fr.camber) * wR);
-                float casterAbs = (Mathf.Abs(fl.caster) * wL + Mathf.Abs(fr.caster) * wR);
-
-                bankMul =
-                    1f +
-                    tilt * bankTiltGain +
-                    camberAbs * camberGain +
-                    casterAbs * casterGain;
-
-                bankMul = Mathf.Clamp(bankMul, 0.75f, 1.35f);
-                rawAlignRack *= bankMul;
-
-                var currentRatio = Car.Axles.frontAxle.maxSteeringAngle;
-                if(useCustomRatio)
-                {
-                    currentRatio = steeringRackRatio;
-                }
-                // ---- rack ratio (convert rack moment -> steering wheel moment)
-                rawAlignRack /= Mathf.Max(1f, currentRatio);
-
-                // ---- shape near center
-                float normAlign = Mathf.Clamp(rawAlignRack / mzNormalize, -1f, 1f);
-                float softened = PowSigned(normAlign, mzSoftPower) * mzNormalize;
-
-                tireTorque = softened * contactBlend;
+                tireTorque = softenedAlign * contactBlend;
             }
 
-            // =====================================================================================
-            // 11) Bumps / curb kick:
-            //     A) dFz/dt jolt (front + rear)
-            //     B) optional compression velocity kick (adds "suspension movement" feel while loaded)
-            // =====================================================================================
+            // ===== 11) Bumps / curb kick (dFz/dt) FRONT + REAR, both directions =====
             float bumpTorque = 0f;
 
-            // ---- A) dFz/dt jolt (N/s)
             float frontJolt = 0f;
             if (frontLoaded)
             {
@@ -1435,88 +1130,56 @@ namespace RPMLeds
                 rearJolt = (rlJ + rrJ) * 0.5f;
             }
 
-            // ---- update prev forces every frame (important)
+            // update prevs every frame (important!)
             _flPrevFz = fl.normalForce;
             _frPrevFz = fr.normalForce;
             _rlPrevFz = rl.normalForce;
             _rrPrevFz = rr.normalForce;
 
-            float jolt = frontJolt + rearJolt * rearBumpScale;
+            float jolt = frontJolt + rearJolt * rearBumpScale; // N/s
 
             // deadzone for noise (both directions)
             if (Mathf.Abs(jolt) < bumpDead) jolt = 0f;
             else jolt -= Mathf.Sign(jolt) * bumpDead;
 
-            float joltTorque = Mathf.Clamp(jolt * bumpGain, -bumpClamp, bumpClamp);
+            float rawBump = Mathf.Clamp(jolt * bumpGain, -bumpClamp, bumpClamp);
 
-            // ---- B) optional compression velocity kick
-            float compTorque = 0f;
-            if (bumpUseCompressionVel)
-            {
-                float flCv = (fl.compression - _flPrevComp) / dt;
-                float frCv = (fr.compression - _frPrevComp) / dt;
-                float rlCv = (rl.compression - _rlPrevComp) / dt;
-                float rrCv = (rr.compression - _rrPrevComp) / dt;
-
-                _flPrevComp = fl.compression;
-                _frPrevComp = fr.compression;
-                _rlPrevComp = rl.compression;
-                _rrPrevComp = rr.compression;
-
-                float compV = ((flCv + frCv) * 0.5f) + ((rlCv + rrCv) * 0.5f) * rearCompScale;
-
-                // optional deadzone
-                if (Mathf.Abs(compV) < compVelDead) compV = 0f;
-                else compV -= Mathf.Sign(compV) * compVelDead;
-
-                compTorque = Mathf.Clamp(compV * compVelGain, -compVelClamp, compVelClamp);
-            }
-            else
-            {
-                // keep prev comps updated even if disabled (prevents spikes if enabled later)
-                _flPrevComp = fl.compression;
-                _frPrevComp = fr.compression;
-                _rlPrevComp = rl.compression;
-                _rrPrevComp = rr.compression;
-            }
-
-            float rawBump = joltTorque + compTorque;
-
-            // fast filter (separate from main torque smoothing)
+            // fast filter
             _bumpFiltered = Mathf.Lerp(_bumpFiltered, rawBump, bumpSmoothing);
+
             bumpTorque = _bumpFiltered;
 
-            // =====================================================================================
-            // 12) Combine torque
-            // =====================================================================================
-            float totalTorque = springTorque + damperTorque + frictionTorque + tireTorque + bumpTorque;
+            // Optional: make bumps stronger when steering is turned
+            // bumpTorque *= (0.5f + 0.5f * Mathf.Abs(wheelNorm));
 
-            // 13) Filter torque (main low-pass)
+            // ===== 12) Combine torque =====
+            float totalTorque = damperTorque + frictionTorque + tireTorque + bumpTorque;
+
+            // ===== 13) Filter torque =====
             filteredTorque = Mathf.Lerp(filteredTorque, totalTorque, torqueSmoothing);
 
-            // 14) Map to Logitech force units
+            // ===== 14) Map to Logitech force units =====
             float targetForce = filteredTorque * torqueScale;
             targetForce = SoftLimit(targetForce, softLimitK);
             targetForce = Mathf.Clamp(targetForce, -maxForce, maxForce);
 
-            // 15) Airborne hard release (front only)
+            // ===== 15) Airborne hard release (front only) =====
             if (!frontLoaded)
             {
                 targetForce = 0f;
                 filteredTorque = Mathf.Lerp(filteredTorque, 0f, airFilterReset);
                 lastSentForce = Mathf.MoveTowards(lastSentForce, 0f, airHardReleasePerSec * dt);
-                _bumpFiltered = Mathf.Lerp(_bumpFiltered, 0f, airFilterReset);
             }
 
-            // 16) Rate limit (release faster than apply)
+            // ===== 16) Rate limit (release faster than apply) =====
             float maxUpStep = rateUpPerSec * dt;
             float maxDownStep = rateDownPerSec * dt;
 
             float step = (Mathf.Abs(targetForce) < Mathf.Abs(lastSentForce)) ? maxDownStep : maxUpStep;
             float limitedForce = Mathf.MoveTowards(lastSentForce, targetForce, step);
+
             lastSentForce = limitedForce;
 
-            // LUT after rate-limit (good)
             limitedForce = ApplyLut(limitedForce, maxForce);
 
             int force = Mathf.RoundToInt(Mathf.Clamp(limitedForce, -maxForce, maxForce));
@@ -1527,23 +1190,16 @@ namespace RPMLeds
                 ShowInDebugWindow("Speed(m/s)", speed);
                 ShowInDebugWindow("RearSlip01", rearSlip01);
 
-                ShowInDebugWindow("WheelAcc", (int)wheelAccDegPerSec2);
-                ShowInDebugWindow("SAT01", sat01);
-                ShowInDebugWindow("BankMul", bankMul);
                 ShowInDebugWindow("TireTorque", tireTorque);
-                ShowInDebugWindow("BumpTorque", bumpTorque);
                 ShowInDebugWindow("DamperTorque", damperTorque);
-                ShowInDebugWindow("SpringTorque", springTorque);
                 ShowInDebugWindow("TotalTorque", totalTorque);
-
-                ShowInDebugWindow("LastSentBeforeLUT", lastSentForce);
                 ShowInDebugWindow("LimitedForce", limitedForce);
                 ShowInDebugWindow("FFB Force", force);
             }
 
             return force;
         }
-        private void ShowInDebugWindow(string Name,float value)
+        private void ShowInDebugWindow(string Name, float value)
         {
             if (_DEBUGVALS.ContainsKey(Name))
             {
@@ -1556,7 +1212,7 @@ namespace RPMLeds
         }
         private void Update()
         {
-            if(UseDirectInputFFB) return;
+            if (UseDirectInputFFB) return;
 
             if (keybind.GetKeybindDown())
             {
@@ -1595,7 +1251,7 @@ namespace RPMLeds
                     propertiesEdit = text + "allowControllerProperties = " + logiControllerPropertiesData.allowControllerProperties + "\n";
                     text = propertiesEdit;
                     propertiesEdit = text + "Profiler Operating Range = " + profilerOperatinRange + "\n";
-                  
+
 
                 }
                 actualState = "Steering wheel current state : \n\n";
@@ -1627,8 +1283,8 @@ namespace RPMLeds
                 activeForces += $"RPM Led Start = {rpm_FIRST_LED.ToString("0.00")}\n";
                 activeForces += $"RPM Led Max = {shiftPoint.ToString("0.00")}\n";
                 activeForces += $"DEBUG VARS:\n";
-                
-                foreach(var varible in _DEBUGVALS)
+
+                foreach (var varible in _DEBUGVALS)
                 {
                     activeForces += $"{varible.Key}:{varible.Value.ToString("0.000")}\n";
                 }
@@ -1678,8 +1334,8 @@ namespace RPMLeds
             logiControllerPropertiesData.defaultSpringGain = _profilerDefaultSpringGain.GetValue();
         }
 
-        [DllImport("LogitechSteeringWheel",CallingConvention = CallingConvention.Cdecl)] 
-        private static extern bool LogiSetPreferredControllerProperties(int controllerIndex,ref RPMLeds.LogiControllerPropertiesData properties);
+        [DllImport("LogitechSteeringWheel", CallingConvention = CallingConvention.Cdecl)]
+        private static extern bool LogiSetPreferredControllerProperties(int controllerIndex, ref RPMLeds.LogiControllerPropertiesData properties);
         [DllImport("LogitechSteeringWheel", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         public static extern bool LogiGetCurrentControllerProperties(int index, ref LogiControllerPropertiesData properties);
         private bool ApplyProfilerWheelProperties(int controllerIndex, ref RPMLeds.LogiControllerPropertiesData props)
