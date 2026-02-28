@@ -24,6 +24,7 @@ namespace RPMLeds
         public static bool Patch = true;
         public bool UseDirectInputFFB = false;
         public bool DIFFBInit = false;
+        public bool DETECTMODCARS = false;
         private HarmonyInstance harmony;
         #region Dirtect Input
         [DllImport("user32")]
@@ -110,6 +111,8 @@ namespace RPMLeds
         SettingsSliderInt _DIMultyply;
         SettingsCheckBox _UseDIFFB;
         SettingsCheckBox _SendMozaTelemtry;
+        FsmGameObject VehicleSpawn;
+        SettingsCheckBox _detectModCars;
         int _DIFFBMltpy = 1000;
         bool _SendMozaTelemetry = false;
         #region SettingsVars_FFBAdvanced
@@ -170,6 +173,7 @@ namespace RPMLeds
         FsmString currentVeh;
         int _CONSTANTSOFTSTOP = 100;
         public static Dictionary<string, RegularCarInfo> CARS = new Dictionary<string, RegularCarInfo>();
+        public static Dictionary<GameObject, RegularCarInfo> CARSMOD = new Dictionary<GameObject, RegularCarInfo>();
         int profilerOperatinRange = 900;
         const float RPM_MAX_DEFAULT = 7000f;
         const float RPM_FIRST_DEFAULT = 5000f;
@@ -594,7 +598,7 @@ namespace RPMLeds
             _UseDIFFB = SettingsTranslationExtensions.AddCheckBox("_UseDIFFB", "Use Direct Input FFB (!GAME RESTART REQUIRED!)", false, SettingChanged);
             _DIMultyply = SettingsTranslationExtensions.AddSlider("_DIMultyply", "Direct Input FFB Force Multiply", 1, 10000, 1000, SettingChanged, visibleByDefault: false);
             _SendMozaTelemtry = SettingsTranslationExtensions.AddCheckBox("_SendMozaTelemtry", "Send Telemetry to Pit House", false, SettingChanged, visibleByDefault: false);
-
+            _detectModCars = Settings.AddCheckBox("_detectModCars","Detect Mod Cars", false, SettingChanged,visibleByDefault:true);
             _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged, visibleByDefault: false);
 
         }
@@ -659,6 +663,8 @@ namespace RPMLeds
 
             _SendMozaTelemetry = _SendMozaTelemtry.GetValue();
             _DIFFBMltpy = _DIMultyply.GetValue();
+
+            DETECTMODCARS = _detectModCars.GetValue();
 
             if (logiInit)
                 SetOldWheelProperties();
@@ -731,7 +737,7 @@ namespace RPMLeds
             Patch = _modEnabled.GetValue();
 
             currentVeh = FsmVariables.GlobalVariables.GetFsmString("PlayerCurrentVehicle");
-
+            VehicleSpawn = FsmVariables.GlobalVariables.GetFsmGameObject("VehicleSpawn");
             maxSteeringAngle = GameObject.Find("Systems/OptionsDB").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
 
             raceTachot = InitPartValue("Tacho", "VINP_Tachometer", "SettingRPM");
@@ -744,6 +750,7 @@ namespace RPMLeds
             CARS.Add("Gifu", RegularCarInfo.initCar("GIFU(750/450psi)"));
             CARS.Add("Bachglotz", RegularCarInfo.initCar("BACHGLOTZ(1905kg)"));
 
+            
             SettingChanged();
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
@@ -872,8 +879,20 @@ namespace RPMLeds
                 if (!LogiOK()) return;
             }
 
-            CURRENTCAR = CARS[currentVeh.Value];
-
+            if(DETECTMODCARS)
+            {
+                var carGet = CARSMOD.TryGetValue(VehicleSpawn.Value, out CURRENTCAR);
+                if(!carGet)
+                {
+                    CARSMOD.Add(VehicleSpawn.Value, RegularCarInfo.initCar(VehicleSpawn.Value.name));
+                    ModConsole.Log($"RPMLed - Init Car {VehicleSpawn.Value.name}");
+                }
+                carGet = CARSMOD.TryGetValue(VehicleSpawn.Value, out CURRENTCAR);
+            }
+            else
+            {
+                CURRENTCAR = CARS[currentVeh.Value];
+            }
             if (CURRENTCAR == null)
             {
                 ModConsole.Error("Current Car not found it cars list");
@@ -889,7 +908,7 @@ namespace RPMLeds
                 if (!UseDirectInputFFB)
                     PlayLogiRPMLeds();
             }
-
+            
             var vanillaForce = CURRENTCAR.FFBComp.force;
             var advanced = advancedFFBOn && !_IsToggleByCar || advancedFFBOn && _IsToggleByCar && CARSTOGGLE[currentVeh.Value];
             if (!UseDirectInputFFB)
