@@ -2,9 +2,12 @@
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
 using MSCLoader;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
@@ -18,7 +21,7 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.7.8"; // Version
+        public override string Version => "1.8"; // Version
         public override string Description => "FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
         public override Game SupportedGames => Game.MyWinterCar;
         public static bool Patch = true;
@@ -52,7 +55,25 @@ namespace RPMLeds
         private static extern void FreeDirectInput();
 
         #endregion
+        private UdpClient udp;
+        private IPEndPoint endPoint;
+        private byte[] telemetryBuffer = new byte[20];
+        bool sendTelemetry = false;
+        void SetupUDP()
+        {
+            udp = new UdpClient();
+            endPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 10001);
+        }
+        void SendTelemetry(float rpm,float maxRpm,float speedKmh, float gear,float speedMs)
+        {
 
+            Buffer.BlockCopy(BitConverter.GetBytes(rpm), 0, telemetryBuffer, 0, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(maxRpm), 0, telemetryBuffer, 4, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(speedKmh), 0, telemetryBuffer, 8, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(speedMs), 0, telemetryBuffer, 12, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(gear), 0, telemetryBuffer, 16, 4);
+            udp.Send(telemetryBuffer, telemetryBuffer.Length, endPoint);
+        }
         public class PartInfo
         {
             public string Path;
@@ -597,7 +618,7 @@ namespace RPMLeds
 
             _UseDIFFB = SettingsTranslationExtensions.AddCheckBox("_UseDIFFB", "Use Direct Input FFB (!GAME RESTART REQUIRED!)", false, SettingChanged);
             _DIMultyply = SettingsTranslationExtensions.AddSlider("_DIMultyply", "Direct Input FFB Force Multiply", 1, 10000, 1000, SettingChanged, visibleByDefault: false);
-            _SendMozaTelemtry = SettingsTranslationExtensions.AddCheckBox("_SendMozaTelemtry", "Send Telemetry to Pit House", false, SettingChanged, visibleByDefault: false);
+            _SendMozaTelemtry = SettingsTranslationExtensions.AddCheckBox("_SendMozaTelemtry", "Send Telemetry to Pit House(127.0.0.1:10001)", false, SettingChanged, visibleByDefault: true);
             _detectModCars = Settings.AddCheckBox("_detectModCars","Detect Mod Cars", false, SettingChanged,visibleByDefault:true);
             _modEnabled = SettingsTranslationExtensions.AddCheckBox("_modEnabled", "Patch Vanilla FFB (Restart req)", true, SettingChanged, visibleByDefault: false);
 
@@ -627,7 +648,7 @@ namespace RPMLeds
             advancedFFBOn = _enableAdvancedFFB.GetValue();
 
             _ffbEnableLUT.SetVisibility(advancedFFBOn);
-
+            sendTelemetry = _SendMozaTelemtry.GetValue();
             LUTEnabled = _ffbEnableLUT.GetValue();
 
             _LUTShow.SetVisibility(LUTEnabled);
@@ -757,7 +778,8 @@ namespace RPMLeds
             ModConsole.Print("RPMLed - Harmony FFB patches applied. Default FFB Disabled");
             if (UseDirectInputFFB)
                 InitDIFFB();
-
+            if(sendTelemetry)
+            SetupUDP();
         }
         private void LoadLut()
         {
@@ -816,7 +838,7 @@ namespace RPMLeds
             }
             forcesIsZero = true;
         }
-        private void PlayLogiRPMLeds()
+        private void CalculateLeds()
         {
             rpm_MAX = RPM_MAX_DEFAULT;
             rpm_FIRST_LED = RPM_FIRST_DEFAULT;
@@ -847,7 +869,11 @@ namespace RPMLeds
 
             rpm_FIRST_LED = rpm_MAX * (startPercent / 100f);
             shiftPoint = rpm_MAX * (maxPercent / 100f);
-            PlayLedsCall(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
+
+            if (!UseDirectInputFFB)
+                PlayLedsCall(_CONTROLLERINDEX, currentRPM, rpm_FIRST_LED, shiftPoint);
+            if (sendTelemetry)
+                SendTelemetry(currentRPM, shiftPoint, CURRENTCAR.Drivetrain.differentialSpeed, CURRENTCAR.Drivetrain.gear,CURRENTCAR.Rigidbody.velocity.magnitude);
 
         }
         private void PlayLedsCall(int controllerIndex, float currentRpm, float startRpm, float endRpm)
@@ -868,7 +894,7 @@ namespace RPMLeds
         }
         private void Mod_FixedUpdate()
         {
-            if (string.IsNullOrEmpty(currentVeh.Value))
+            if (string.IsNullOrEmpty(currentVeh.Value) || currentVeh.Value == "Bus")
             {
                 if (!forcesIsZero)
                     SetForcesToZero();
@@ -905,8 +931,9 @@ namespace RPMLeds
 
             if (currentRPM > 50 && ledsEnabled)
             {
-                if (!UseDirectInputFFB)
-                    PlayLogiRPMLeds();
+
+                CalculateLeds();
+
             }
             
             var vanillaForce = CURRENTCAR.FFBComp.force;
