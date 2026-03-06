@@ -21,13 +21,15 @@ namespace RPMLeds
         public override string ID => "RPMLeds"; // Your (unique) mod ID 
         public override string Name => "RPM Leds And Advanced FFB"; // Your mod name
         public override string Author => "Izuko"; // Name of the Author (your name)
-        public override string Version => "1.8"; // Version
+        public override string Version => "1.8.3"; // Version
         public override string Description => "FFB Advanced And RPM Leds for Logitech Steering Wheels"; // Short description of your mod 
-        public override Game SupportedGames => Game.MyWinterCar;
+        public override Game SupportedGames => Game.MySummerCar_And_MyWinterCar;
         public static bool Patch = true;
         public bool UseDirectInputFFB = false;
         public bool DIFFBInit = false;
         public bool DETECTMODCARS = false;
+        public bool KekmetBumpNormalize = false;
+        public bool GifuSteeringNormalize = false;
         private HarmonyInstance harmony;
         #region Dirtect Input
         [DllImport("user32")]
@@ -152,7 +154,7 @@ namespace RPMLeds
         SettingsSlider _ffbdriftDamperMul;
         SettingsSlider _ffbdriftMzMul;
         SettingsSlider _ffbdriftTrailMul;
-
+        SettingsCheckBox _KekmetBumpsNormalize;
         SettingsSlider _ffbSteeringFriction;
         SettingsSlider _ffbFrictionDeadVel;
         SettingsSlider _ffbDamperStop;
@@ -179,7 +181,7 @@ namespace RPMLeds
         SettingsSlider _ffbMzGain;
         SettingsSlider _ffbTrailMeters;
         SettingsCheckBox _ffbInvertForce;
-
+        SettingsCheckBox _GifuPowerSteering;
         SettingsButton _LUTShow;
         SettingsButton _LUTReload;
         #endregion
@@ -353,6 +355,13 @@ namespace RPMLeds
         {
             _IsToggleByCar = _ffbToglePerCar.GetValue();
             CARSTOGGLE.Clear();
+            if(ModLoader.CurrentGame == Game.MySummerCar)
+            {
+                _IsToggleByCar = false;
+                _ffbToglePerCar.SetValue(false);
+                _ffbToglePerCar.SetVisibility(false);
+
+            }
             foreach (var carCB in _ffbTogledCarsList)
             {
                 carCB.CB.SetVisibility(_IsToggleByCar);
@@ -370,6 +379,7 @@ namespace RPMLeds
             foreach (var lable in FFBLables)
                 lable.SetVisibility(advOn);
 
+            _KekmetBumpsNormalize.SetVisibility(advOn);
             _ffbbumpGain.SetVisibility(advOn);
             _ffbbumpDead.SetVisibility(advOn);
             _ffbbumpClamp.SetVisibility(advOn);
@@ -380,12 +390,13 @@ namespace RPMLeds
             _ffbdriftDamperMul.SetVisibility(advOn);
             _ffbdriftMzMul.SetVisibility(advOn);
             _ffbdriftTrailMul.SetVisibility(advOn);
+            _GifuPowerSteering.SetVisibility(advOn);
 
             rearSlipStartDeg = _ffbrearSlipStartDeg.GetValue();
             rearSlipFullDeg = _ffbrearSlipFullDeg.GetValue();
             rearSlipMinSpeed = _ffbrearSlipMinSpeed.GetValue();
-
-
+            KekmetBumpNormalize = _KekmetBumpsNormalize.GetValue();
+            GifuSteeringNormalize = _GifuPowerSteering.GetValue();
             driftDamperMul = _ffbdriftDamperMul.GetValue();
             driftMzMul = _ffbdriftMzMul.GetValue();
             driftTrailMul = _ffbdriftTrailMul.GetValue();
@@ -585,7 +596,8 @@ namespace RPMLeds
 
 
             FFBAdvancedSettings();
-
+            _KekmetBumpsNormalize = Settings.AddCheckBox("_KekmetBumpsNormalize", "Normalize Kekmet bumps rate", false, SettingChanged, false);
+            _GifuPowerSteering = Settings.AddCheckBox("_GifuPowerSteering", "Gifu Power Steering", false, SettingChanged, false);
             _ffbToglePerCar = Settings.AddCheckBox("_ffbToglePerCar", "Toggle Advanced FFB by car", false, CarToggleChanged);
 
             _ffbTogledCarsList.Clear();
@@ -686,7 +698,13 @@ namespace RPMLeds
             _DIFFBMltpy = _DIMultyply.GetValue();
 
             DETECTMODCARS = _detectModCars.GetValue();
+            if(ModLoader.CurrentGame == Game.MySummerCar)
+            {
+                DETECTMODCARS = true;
+                _detectModCars.SetValue(true);
+                _detectModCars.SetVisibility(false);
 
+            }
             if (logiInit)
                 SetOldWheelProperties();
         }
@@ -735,6 +753,8 @@ namespace RPMLeds
             public float LastSteeringAngle; //Set By ffb to calculat steering velocity
             public AxisCarController AxisCarController;
             public bool IsCorris;
+            public bool isKEKMET;
+            public bool isGifu;
             public static RegularCarInfo initCar(string carName)
             {
                 var car = GameObject.Find(carName);
@@ -748,7 +768,10 @@ namespace RPMLeds
                     Rigidbody = car.GetComponent<Rigidbody>(),
                     Axles = car.GetComponent<Axles>(),
                     AxisCarController = car.GetComponent<AxisCarController>(),
-                    IsCorris = carName == "CORRIS"
+                    IsCorris = carName == "CORRIS",
+                    isKEKMET = carName == "KEKMET(350-400psi)",
+                    isGifu = carName == "GIFU(750/450psi)"
+
                 };
             }
         }
@@ -759,19 +782,26 @@ namespace RPMLeds
 
             currentVeh = FsmVariables.GlobalVariables.GetFsmString("PlayerCurrentVehicle");
             VehicleSpawn = FsmVariables.GlobalVariables.GetFsmGameObject("VehicleSpawn");
-            maxSteeringAngle = GameObject.Find("Systems/OptionsDB").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
-
-            raceTachot = InitPartValue("Tacho", "VINP_Tachometer", "SettingRPM");
-            revLimit = InitPartValue("RevLimiter", "VINP_Revlimiter", "SettingRPM");
-            CARS.Clear();
-            CARS.Add("Corris", RegularCarInfo.initCar("CORRIS"));
-            CARS.Add("Sorbet", RegularCarInfo.initCar("SORBET(190-200psi)"));
-            CARS.Add("Taxi", RegularCarInfo.initCar("JOBS/TAXIJOB/MACHTWAGEN"));
-            CARS.Add("Kekmet", RegularCarInfo.initCar("KEKMET(350-400psi)"));
-            CARS.Add("Gifu", RegularCarInfo.initCar("GIFU(750/450psi)"));
-            CARS.Add("Bachglotz", RegularCarInfo.initCar("BACHGLOTZ(1905kg)"));
-
-            
+            if(ModLoader.CurrentGame == Game.MyWinterCar)
+            {
+                maxSteeringAngle = GameObject.Find("Systems/OptionsDB").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
+                raceTachot = InitPartValue("Tacho", "VINP_Tachometer", "SettingRPM");
+                revLimit = InitPartValue("RevLimiter", "VINP_Revlimiter", "SettingRPM");
+                CARS.Clear();
+                CARS.Add("Corris", RegularCarInfo.initCar("CORRIS"));
+                CARS.Add("Sorbet", RegularCarInfo.initCar("SORBET(190-200psi)"));
+                CARS.Add("Taxi", RegularCarInfo.initCar("JOBS/TAXIJOB/MACHTWAGEN"));
+                CARS.Add("Kekmet", RegularCarInfo.initCar("KEKMET(350-400psi)"));
+                CARS.Add("Gifu", RegularCarInfo.initCar("GIFU(750/450psi)"));
+                CARS.Add("Bachglotz", RegularCarInfo.initCar("BACHGLOTZ(1905kg)"));
+            }
+            else
+            {
+                DETECTMODCARS = true;
+                _detectModCars.SetValue(true);
+                _detectModCars.SetVisibility(false);
+                maxSteeringAngle = GameObject.Find("Systems/Options").GetComponents<PlayMakerFSM>().Where(x => x.FsmName == "Controls").First().GetVariable<FsmFloat>("SteeringRotationFull");
+            }
             SettingChanged();
             harmony = HarmonyInstance.Create("izuko.rpmledffb");
             harmony.PatchAll();
@@ -1050,6 +1080,8 @@ namespace RPMLeds
 
         private float _flPrevFz, _frPrevFz, _rlPrevFz, _rrPrevFz;
         private float _bumpFiltered;
+        float _frontJoltLP;
+        float _rearJoltLP;
         private int CalculateForces(RegularCarInfo Car, int WheelDInputPositionValue)
         {
             float dt = Time.fixedDeltaTime;
@@ -1156,40 +1188,51 @@ namespace RPMLeds
 
                 tireTorque = softenedAlign * contactBlend;
             }
+            if(Car.isGifu && GifuSteeringNormalize)
+            {
+                tireTorque = ComputeCenterSpring(wheelDeg, wheelVelDegPerSec, speed, 100, 200, 0.1f, 25);
+            }
 
             // ===== 11) Bumps / curb kick (dFz/dt) FRONT + REAR, both directions =====
             float bumpTorque = 0f;
 
-            float frontJolt = 0f;
-            if (frontLoaded)
+            float rawBump = 0;
+            if(Car.isKEKMET && KekmetBumpNormalize || (Car.isGifu && GifuSteeringNormalize))
             {
-                float flJ = (fl.normalForce - _flPrevFz) / dt;
-                float frJ = (fr.normalForce - _frPrevFz) / dt;
-                frontJolt = (flJ + frJ) * 0.5f;
+                rawBump = CalculateSuspBumps(Car, frontLoaded, rearLoaded);
             }
-
-            float rearJolt = 0f;
-            if (rearLoaded)
+            else
             {
-                float rlJ = (rl.normalForce - _rlPrevFz) / dt;
-                float rrJ = (rr.normalForce - _rrPrevFz) / dt;
-                rearJolt = (rlJ + rrJ) * 0.5f;
+                float frontJolt = 0f;
+                if (frontLoaded)
+                {
+                    float flJ = (fl.normalForce - _flPrevFz) / dt;
+                    float frJ = (fr.normalForce - _frPrevFz) / dt;
+                    frontJolt = (flJ + frJ) * 0.5f;
+                }
+
+                float rearJolt = 0f;
+                if (rearLoaded)
+                {
+                    float rlJ = (rl.normalForce - _rlPrevFz) / dt;
+                    float rrJ = (rr.normalForce - _rrPrevFz) / dt;
+                    rearJolt = (rlJ + rrJ) * 0.5f;
+                }
+
+                // update prevs every frame (important!)
+                _flPrevFz = fl.normalForce;
+                _frPrevFz = fr.normalForce;
+                _rlPrevFz = rl.normalForce;
+                _rrPrevFz = rr.normalForce;
+
+                float jolt = frontJolt + rearJolt * rearBumpScale; // N/s
+
+                // deadzone for noise (both directions)
+                if (Mathf.Abs(jolt) < bumpDead) jolt = 0f;
+                else jolt -= Mathf.Sign(jolt) * bumpDead;
+
+                rawBump = Mathf.Clamp(jolt * bumpGain, -bumpClamp, bumpClamp);
             }
-
-            // update prevs every frame (important!)
-            _flPrevFz = fl.normalForce;
-            _frPrevFz = fr.normalForce;
-            _rlPrevFz = rl.normalForce;
-            _rrPrevFz = rr.normalForce;
-
-            float jolt = frontJolt + rearJolt * rearBumpScale; // N/s
-
-            // deadzone for noise (both directions)
-            if (Mathf.Abs(jolt) < bumpDead) jolt = 0f;
-            else jolt -= Mathf.Sign(jolt) * bumpDead;
-
-            float rawBump = Mathf.Clamp(jolt * bumpGain, -bumpClamp, bumpClamp);
-
             // fast filter
             _bumpFiltered = Mathf.Lerp(_bumpFiltered, rawBump, bumpSmoothing);
 
@@ -1244,6 +1287,105 @@ namespace RPMLeds
             }
 
             return force;
+        }
+        float ComputeCenterSpring(float angleDeg, float angVelDeg,float speedMs,float springStrength, float maxSpringTorque, float springStartSpeed, float springFullSpeed     )
+        {
+            float speed01 = Mathf.Clamp01((speedMs - springStartSpeed) / (springFullSpeed - springStartSpeed));
+            float spring = -angleDeg * springStrength * speed01;
+            float t = spring;
+            return Mathf.Clamp(t, -maxSpringTorque, maxSpringTorque);
+        }
+        private float CalculateSuspBumps(RegularCarInfo Car,bool frontLoaded,bool rearLoaded)
+        {
+            float dt = Time.fixedDeltaTime;
+            var fl = Car.Axles.frontAxle.leftWheel;
+            var fr = Car.Axles.frontAxle.rightWheel;
+            var rr = Car.Axles.rearAxle.rightWheel;
+            var rl = Car.Axles.rearAxle.leftWheel;
+            float frontJolt = 0f;
+            if (frontLoaded)
+            {
+                float flJ = (fl.normalForce - _flPrevFz) / dt;
+                float frJ = (fr.normalForce - _frPrevFz) / dt;
+                frontJolt = (flJ + frJ) * 0.5f;
+            }
+
+            float rearJolt = 0f;
+            if (rearLoaded)
+            {
+                float rlJ = (rl.normalForce - _rlPrevFz) / dt;
+                float rrJ = (rr.normalForce - _rrPrevFz) / dt;
+                rearJolt = (rlJ + rrJ) * 0.5f;
+            }
+
+            // update prevs every frame (important!)
+            _flPrevFz = fl.normalForce;
+            _frPrevFz = fr.normalForce;
+            _rlPrevFz = rl.normalForce;
+            _rrPrevFz = rr.normalForce;
+
+
+            // ============================================================
+            // Suspension shaping (uses axle static values)
+            // ============================================================
+
+            // Get axle params (rename to whatever you actually have)
+            float kFront = Car.Axles.frontAxle.suspensionRate;      // N/m
+            float kRear = Car.Axles.rearAxle.suspensionRate;       // N/m
+            float tFront = Car.Axles.frontAxle.suspensionTravel;    // m
+            float tRear = Car.Axles.rearAxle.suspensionTravel;     // m
+
+            // Supported mass approximation from current Fz
+            float mFront = (fl.normalForce + fr.normalForce) / 9.81f; // kg
+            float mRear = (rl.normalForce + rr.normalForce) / 9.81f; // kg
+
+            // 1) Low-pass by suspension natural frequency (spring eats HF)
+            float wFront = Mathf.Sqrt(kFront / Mathf.Max(mFront, 1f)); // rad/s
+            float wRear = Mathf.Sqrt(kRear / Mathf.Max(mRear, 1f)); // rad/s
+
+            float aFront = 1f - Mathf.Exp(-wFront * dt); // stable alpha
+            float aRear = 1f - Mathf.Exp(-wRear * dt);
+
+            _frontJoltLP = Mathf.Lerp(_frontJoltLP, frontJolt, aFront);
+            _rearJoltLP = Mathf.Lerp(_rearJoltLP, rearJolt, aRear);
+
+            // 2) Travel capacity absorber (small bumps fully eaten)
+            // capacity in N ~ k * travel
+            float capFrontN = kFront * tFront;
+            float capRearN = kRear * tRear;
+
+            // convert to N/s capacity using a tunable timescale.
+            // bumpRate bigger => faster suspension => lets more through.
+            float tauFront = 0.02f + (4000f / Mathf.Max(Car.Axles.frontAxle.bumpRate, 1f)) * 0.02f;
+            float tauRear = 0.02f + (4000f / Mathf.Max(Car.Axles.rearAxle.bumpRate, 1f)) * 0.02f;
+
+            float capFrontJ = capFrontN / Mathf.Max(tauFront, 1e-4f);
+            float capRearJ = capRearN / Mathf.Max(tauRear, 1e-4f);
+
+            static float AbsorbJolt(float j, float cap)
+            {
+                float a = Mathf.Abs(j);
+                if (a <= cap) return 0f;                 // fully eaten
+                return Mathf.Sign(j) * (a - cap);        // only excess passes
+            }
+
+            float frontAfter = AbsorbJolt(_frontJoltLP, capFrontJ);
+            float rearAfter = AbsorbJolt(_rearJoltLP, capRearJ);
+
+            // Combine axles (rear scaled)
+            float jolt = frontAfter + rearAfter * rearBumpScale; // N/s
+
+
+            // ============================================================
+            // Your existing deadzone + clamp + fast filter
+            // ============================================================
+
+            // deadzone for noise (both directions)
+            if (Mathf.Abs(jolt) < bumpDead) jolt = 0f;
+            else jolt -= Mathf.Sign(jolt) * bumpDead;
+
+            float rawBump = Mathf.Clamp(jolt * bumpGain, -bumpClamp, bumpClamp);
+            return rawBump;
         }
         private void ShowInDebugWindow(string Name, float value)
         {
